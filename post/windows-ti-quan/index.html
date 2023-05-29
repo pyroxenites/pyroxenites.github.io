@@ -1,0 +1,330 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>windows提权 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">windows提权</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-05-10</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/lOr-AdJnN/">
+                    内网渗透
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h1 id="实战1">实战1</h1>
+<h2 id="查看数据库提权">查看数据库提权</h2>
+<p>net user 观察，sqlserver账号做了降权处理<br>
+<img src="https://pyroxenites.github.io/post-images/1650094697769-2ceff2ca-875e-4e05-9b03-73f8c24b4bb6.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650005080507-bce2931b-ef1a-4a12-a9cf-ab972cfd3619.png" alt="image.png" loading="lazy"></p>
+<h2 id="权限">权限</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1649990120665-aea1b166-37cb-40e3-9df5-3e089b20b8e2.png" alt="image.png" loading="lazy"><br>
+看到IIS和SeAssignPrimaryTokenPrivilege很容易联想到土豆家族的提权</p>
+<h2 id="效果">效果</h2>
+<p>先看结果<br>
+CS中的getsystem<br>
+<img src="https://pyroxenites.github.io/post-images/1649990365773-aef0036a-31f4-4c4b-9176-895d788c1ebd.png" alt="image.png" loading="lazy"><br>
+失败了<br>
+CS中的GetSystem具体原理是什么</p>
+<blockquote>
+<p><a href="https://www.cobaltstrike.com/blog/what-happens-when-i-type-getsystem/">https://www.cobaltstrike.com/blog/what-happens-when-i-type-getsystem/</a></p>
+</blockquote>
+<p>SweetPotato和JuicyPotato效果<br>
+<img src="https://pyroxenites.github.io/post-images/1649990449311-92052b37-fe0c-4fd3-ae08-28b70891325b.png" alt="image.png" loading="lazy"><br>
+也都是失败了</p>
+<p>再来看看Badpotato也就是Csharp版本的pipepotato<br>
+<img src="https://pyroxenites.github.io/post-images/1649990498804-2a147fdb-e456-4456-8b43-3d867789b199.png" alt="image.png" loading="lazy"><br>
+这个成功了<br>
+不过利用哥斯拉自带的Badpotato的效果就不一样了<br>
+<img src="https://pyroxenites.github.io/post-images/1649990587340-5b405c77-ef7b-4ba6-bf77-ebe09fa50041.png" alt="image.png" loading="lazy"><br>
+pipepotato简单的原理就是<br>
+createNamedPipe()创建一个命令管道，调用ConnectNamedepipe()等待clinet连接，迫使高权限进程连接命令管道并写入数据，调用ImpersonateNamedPipeClient()，派生一个高权限进程的客户端</p>
+<p>其实看到这样原理很容易会联想到MSF的getsystem的原理</p>
+<p>Windows服务已启动，导致与命名管道建立连接，该进程接收连接并调用ImpersonateNamedPipeClient，从而为SYSTEM用户创建模拟令牌，然后用新收集的SYSTEM模拟令牌产生cmd.exe，并且我们有一个SYSTEM特权进程</p>
+<p>这里上线的时候直接卡死，故放弃此项实验<br>
+<img src="https://pyroxenites.github.io/post-images/1650694627968-2de72989-930e-4862-9b0f-5f415dfb32fd.png" alt="image.png" loading="lazy"><br>
+不过Badpotato通杀效果确实好一些</p>
+<h2 id=""></h2>
+<blockquote>
+<p><a href="https://github.com/Ascotbe/Kernelhub/blob/master/README.CN.md">https://github.com/Ascotbe/Kernelhub/blob/master/README.CN.md</a></p>
+</blockquote>
+<h1 id="实战2">实战2</h1>
+<p><img src="https://pyroxenites.github.io/post-images/1650690658633-515fd665-9d0a-458a-944f-3ea102183e06.png" alt="image.png" loading="lazy"><br>
+我们通过不是sa权限的os-shell进去以后，发现是IIS权限<br>
+一般猜测是被黑了</p>
+<pre><code class="language-java">Get-Acl -Path HKLM:\SAM\SAM | Format-List
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1650690737760-21fb8e61-32d1-4fdd-9bce-a8c385cc3c20.png" alt="image.png" loading="lazy"><br>
+反弹shell以后进行查看，发现确实有被黑过的痕迹，因为SAM注册表一般默认只有System具备完全控制权，管理员一般不会修改，一般可作为后门使用<br>
+这里使用post/windows/gather/hashdump，发现可以读取出Hash，但感觉使用中的MSF有问题<br>
+所以只是觉得是一个思路<br>
+<img src="https://pyroxenites.github.io/post-images/1650693661375-4251c2da-dee9-4e56-a09c-5962bb2e1800.png" alt="image.png" loading="lazy"></p>
+<h1 id="实战3">实战3</h1>
+<p>通过读取配置文件<br>
+<img src="https://pyroxenites.github.io/post-images/1650693951078-13949fbb-bcfe-4e3e-927b-ab8b883daa7c.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650693934454-21dd4ab4-c1d9-458d-a9e3-3952b8f80821.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650693988674-8e2aa0d7-6f18-4287-88e4-53bdde85c65e.png" alt="image.png" loading="lazy"><br>
+在web配置文件中找到了sa权限的数据库密码，可利用进行提权</p>
+<h1 id="原理">原理</h1>
+<blockquote>
+<p>在一个红队面试题看到了</p>
+</blockquote>
+<h2 id="前言">前言</h2>
+<p>俗称的Rotten 	Potato(烂土豆)提权就是MS16-075</p>
+<p>可将windows工作站上的特权从最低级别提升到最高级别,即NT AUTHORITY\SYSTEM 权限</p>
+<blockquote>
+<p>https://github.com/foxglovesec/RottenPotato</p>
+</blockquote>
+<blockquote>
+<p>是一个本地提权,是针对本地用户的,不能用于域用户</p>
+</blockquote>
+<p>官方漏洞通知:<br>
+<a href="https://docs.microsoft.com/zh-cn/security-updates/Securitybulletins/2016/ms16-075">https://docs.microsoft.com/zh-cn/security-updates/Securitybulletins/2016/ms16-075</a></p>
+<p>Windows SMB服务器特权提升漏洞(CVE-2016-3225),当攻击者转发适用于在同一计算机上运行的其他服务的身份验证请求时,_Microsoft服务器消息块(SMB)中存在特权提升漏洞,成功利用此漏洞的攻击者可以使用提升的特权执行任意代码。_若利用此漏洞,攻击者首先必须登录系统。然后，攻击者可以运行一个为利用此漏洞而经特殊设计的应用程序，从而控制受到影响的系统。</p>
+<blockquote>
+<p>此更新通过更正windows服务器消息快(SMB)服务器处理凭据转发请求的方式来修复此漏洞<br>
+微软将其定义为KB3164038</p>
+</blockquote>
+<h2 id="简单原理">简单原理</h2>
+<ol>
+<li>欺骗&quot;NT AUTHORITY\SYSTEM&quot;账户通过NTLM认证到控制的TCP终端</li>
+<li>对这个认证过程使用_中间人攻击(NTLM重放),为&quot;NT AUTHORITY\SYSTEM&quot;_账户本地协商一个安全令牌。这个过程通过一系列的windows api调用实现的。</li>
+<li>模仿这个令牌,只有具有&quot;模仿安全令牌权限&quot;的账户才能去模仿别人令牌,一般大多数服务型账户(IIS,MSSQL等)都有这个权限,用户级账户大多数没有这个权限</li>
+</ol>
+<blockquote>
+<p>一般从web拿到的webshell都是IIS服务器权限,具有这个模仿权限</p>
+</blockquote>
+<h2 id="提权条件">提权条件</h2>
+<blockquote>
+<p>利用Potato提权的是前提是拥有<strong>SeImpersonatePrivilege</strong>或<strong>SeAssignPrimaryTokenPrivilege</strong>权限<br>
+一般用户拥有SelmpersonatePrivilege(而只有更高权限的账户比如SYSTEM才有SeAssignPrimaryTokenPrivilege权限)</p>
+</blockquote>
+<p>以下用户拥有该权限</p>
+<blockquote>
+<ul>
+<li>本地管理员组成员和本地服务帐户</li>
+<li>由服务控制管理器启动的服务</li>
+<li>由组件对象模型 (COM) 基础结构启动的并配置为在特定帐户下运行的COM服务器</li>
+</ul>
+</blockquote>
+<pre><code class="language-csharp">whoami /priv
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1647393681789-ac465566-f471-47c1-9cb8-616274379e8e.png" alt="image.png" loading="lazy"></figure>
+<h2 id="多汁土豆提权">多汁土豆提权</h2>
+<pre><code class="language-csharp">https://github.com/ohpe/juicy-potato
+</code></pre>
+<h3 id="前置知识">前置知识</h3>
+<blockquote>
+<ol>
+<li>使用DCOM时，如果以服务的方式远程连接，那么权限为System，例如BITS服务</li>
+<li>使用DCOM可以通过TCP连接到本机的一个端口，发起NTLM认证，该认证可以被重放</li>
+<li>LocalService用户默认具有SeImpersonate和SeAssignPrimaryToken权限</li>
+<li>开启SeImpersonate权限后，能够在调用CreateProcessWithToken时，传入新的Token创建新的进程</li>
+<li>开启SeAssignPrimaryToken权限后，能够在调用CreateProcessAsUser时，传入新的Token创建新的进程</li>
+</ol>
+</blockquote>
+<blockquote>
+<p>1、加载COM，发出请求，权限为System<br>
+在指定ip和端口的位置尝试加载一个COM对象。<br>
+RottenPotatoNG使用的COM对象为BITS，CLSID为**{4991d34b-80a1-4291-83b6-3328366b9097}**<br>
+可供选择的COM对象不唯一，Juicy Potato提供了多个，详细列表可参考如下地址：<br>
+<a href="https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md">https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md</a></p>
+<p>2、回应步骤1的请求，发起NTLM认证<br>
+正常情况下，由于权限不足，当前权限不是System，无法认证成功。</p>
+<p>3、针对本地端口，同样发起NTLM认证，权限为当前用户<br>
+由于权限为当前用户，所以NTLM认证能够成功完成。<br>
+RottenPotatoNG使用的135端口。<br>
+Juicy Potato支持指定任意本地端口，但是RPC一般默认为135端口，很少被修改。</p>
+<p>4、分别拦截两个NTLM认证的数据包，替换数据，通过NTLM重放使得步骤1(权限为System)的NTLM认证通过，获得System权限的Token<br>
+重放时需要注意NTLM认证的NTLM Server Challenge不同，需要修正。</p>
+<p>5、利用System权限的Token创建新进程<br>
+如果开启SeImpersonate权限，调用CreateProcessWithToken，传入System权限的Token，创建的进程为System权限。<br>
+如果开启SeAssignPrimaryToken权限，调用CreateProcessAsUser，传入System权限的Token，创建的进程为System权限<br>
+[</p>
+</blockquote>
+<p>](https://blog.csdn.net/negnegil/article/details/120243657)</p>
+<p>简洁版</p>
+<blockquote>
+<p>在本地账户的权限下<br>
+1.以system权限加载COM请求，认证NTLM（当然我们是本地账户，无法越权使用system权限，会认证失败）</p>
+<p>2.再以本地账户权限发起默认135端口请求，认证NTLM（这次权限对了认证成功了）</p>
+<p>3.分别拦截两个NTLM的数据包，替换数据，使得通过步骤1的认证，获得system权限的token</p>
+<p>4.利用system权限的token创建进程</p>
+</blockquote>
+<pre><code class="language-csharp">如果开启SeImpersonate权限，juicypotato的参数可以使用-t t 
+如果开启SeAssignPrimaryToken权限，juicypotato的参数可以使用-t u 
+如果均开启，可以选择-t * 如果均未开启，那么无法提权。
+</code></pre>
+<pre><code class="language-csharp">netstat -abno
+查看RPC默认端口是否为135
+
+
+##若rpc服务被修改，则使用-n 参数指定修改后的端口，如 -n 111
+##添加防火墙规则，允许135端口入站
+##netsh advfirewall firewall add rule name=&quot;135&quot; protocol=TCP dir=in localport=135 action=allow
+</code></pre>
+<pre><code class="language-csharp">https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md
+
+不同操作系统选择可用的CLSID
+例如测试系统Server2012，选择CLSID为{8BC3F05E-D86B-11D0-A075-00C04FB68820}
+
+
+
+选择系统未占用的端口作为监听端口
+最终提权命令如下
+
+JuicyPotato.exe -t t -p c:\windows\system32\cmd.exe -l 1111 -c {8BC3F05E-D86B-11D0-A075-00C04FB68820}
+执行成功即可获取一个system权限的shell，后续就是打开任务管理器，关闭explore任务，再开启explore任务即可得到一个system权限的桌面
+</code></pre>
+<h3 id="webshell版本">webshell版本</h3>
+<p><a href="https://github.com/uknowsec/JuicyPotato">https://github.com/uknowsec/JuicyPotato</a></p>
+<pre><code class="language-csharp">C:\juicyPotato_32.exe -p whoami
+
+##执行命令
+execute -f juicypotato.exe -p net user test 123456
+execute -f juicypotato.exe -p net localgroup administrators test /add
+</code></pre>
+<h2 id="其他问题">其他问题</h2>
+<p>为什么即使打了补丁,但是土豆提权这个方法依然好用</p>
+<blockquote>
+<p>不同系统补丁编号可能不一样</p>
+</blockquote>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/redis/">
+              <h3 class="post-title">
+                下一篇：redis
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

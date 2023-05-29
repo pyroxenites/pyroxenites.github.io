@@ -1,0 +1,267 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>CobaltStrike简要分析 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">CobaltStrike简要分析</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-11-18</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/Ush7MRI1K/">
+                    C2
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h2 id="背景">背景</h2>
+<p>cobaltstrike因为其简单的操作，丰富的功能和插件市场，较好的联动性，所以比较受到攻击者的青睐<br>
+这里我们从attck官方图中可以看到CS从Reconnaissance到Impact都有覆盖</p>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1667523226987-6a967b93-01cc-409a-944d-5092b097295a.png" alt="" loading="lazy"></figure>
+<blockquote>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1667200391270-8a99b7ed-fd85-4bad-97ad-e486cc9602e7.png" alt="" loading="lazy"></figure>
+</blockquote>
+<p>不过随着CS4.4开始，破解难度随着版本更新而提高，到CS4.6版本做了两端分离，把teamserver提取出来做成了原生的二进制文件，以及二进制版本的teamserver也可能会存在多处暗桩，提高破解和二开难度。<br>
+到目前最新版本为CS4.7.2中，算是在保持灵活性、稳定性、可扩展性基础上，添加了BOF功能扩展、剪贴板获取、socks5代理、黑暗主题、等一些功能，而4.7.1和4.7.2这两个小版本则主要是修复了xss-RCE漏洞和漏洞绕过。<br>
+虽然近段时间，伴随着越来越多其他公开C2的兴起，但是，随之而来，也会有使用成本，攻击者需要时间过渡，如sliver，Havoc，如果是BRC4这种商业软件还需要破解成本和泄露时间成本，以及软件开发作者对泄露版本的&quot;惩罚措施&quot;。所以目前CS依然会是攻击者常用的工具之一，以下文章会对默认的CS进行简单分析。</p>
+<h2 id="cs如何生成木马">CS如何生成木马</h2>
+<p>首先我们需要了解，CS几十个功能点放在哪里，比如我们执行console控制台shell whoami，最终谁去执行了这个功能呢，实现地方就是beacon.dll，被控端通过加载beacon.dll去实现CS的功能点，它位于源码包/sleeve的位置<br>
+<img src="https://pyroxenites.github.io/post-images/1667282658162-22ece19e-6563-47ec-a9ba-ccea9d835fad.png" alt="" loading="lazy"><br>
+当然在sleeve存放着很多dll，这些都是反射DLL，主要是去实现CS某个功能点的，这个在后续会提及到<br>
+<img src="https://pyroxenites.github.io/post-images/1667282835976-c4d56c63-37cc-4a1b-9ad7-46438a9b84b7.png" alt="" loading="lazy"><br>
+但是当我们从Jar包中提取出来以后，会发现它是被加密的，是需要key解密的，这个地方就涉及到CS破解问题了<br>
+<img src="https://pyroxenites.github.io/post-images/1667282981206-8c82d287-e26f-4cca-bea0-fb08ba9963e5.png" alt="" loading="lazy"><br>
+当我们拿到对应版本的key去解密，此刻就可以拿到可解析的beacon.dll了</p>
+<blockquote>
+<p><a href="https://github.com/ca3tie1/CrackSleeve">https://github.com/ca3tie1/CrackSleeve</a></p>
+</blockquote>
+<p>我们以现在比较常用的Stagless(无阶段)为例，去看看默认的Stageless EXE是如何生成的，相比于前几年攻击者比较喜欢用的Stage(有阶段)而言，它不需要向teamserver请求下载植入体(beacon.dll)，而是把植入体直接内嵌到里面去，但也是因为内嵌，所以体积会比Stage生成的要更大，但对应的下载导致特征也会减少。<br>
+<img src="https://pyroxenites.github.io/post-images/1667285678075-060e337a-5d56-4017-ae82-479cecf4ac09.png" alt="" loading="lazy"><br>
+我们可以通过关键字定位法，可以看到生成的图形化位于WindowsExecutableStageDialog代码中，然后可以把反编译后的源码放到我们项目的src目录下进行编译便可调试，当我们点击Generate按钮生成木马的时候，源码便会断在dialogAction函数中<br>
+<img src="https://pyroxenites.github.io/post-images/1667286059717-43617e4f-a5f6-4589-9bfb-e2380d23d8b6.png" alt="" loading="lazy"><br>
+该函数首先根据传入的参数，获取了监听器名称、架构，然后根据监听器名称获取到一个ScListener对象，生成这个ScListener对象，则是我们监听器的配置信息，里面包括C2profile的设置，以及通信密钥，通信密钥这边是启动teamserver的时候反序列化.cobaltstrike.beacon_keys文件得到的，而且会在beacon上线那里用得到密钥<br>
+<img src="https://pyroxenites.github.io/post-images/1667356885145-5b6c4871-c83b-4864-83e0-0b98a37309fc.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667356996261-4537ba7c-5cd6-43e9-82d9-4d646c37efd5.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667462433620-b2b2bb8e-57ab-4a4a-b397-92bda8638ab9.png" alt="" loading="lazy"><br>
+随后代码我们看到，代码调用了ScListener对象的export方法，进入到export方法中我们可以看到，会根据不同的监听器类型，选择不同的处理方法<br>
+<img src="https://pyroxenites.github.io/post-images/1667357857105-3431fd97-904b-409a-9b12-75fdf135e59e.png" alt="" loading="lazy"><br>
+我们进入到reverse_https类型对应的处理方法中可以看到，代码在根据选择的架构来选择所需要使用的DLL文件，也就是我们上面所提及到的beacon.dll ,而此函数调用的exportBeaconStage方法则是对C2profile的处理，pe.process则是对PE格式等一些数据进行处理<br>
+<img src="https://pyroxenites.github.io/post-images/1667357921636-bfaa9d52-3ff0-45dd-80ff-542ccff840b2.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358073911-69e892be-9566-4d87-82fe-c35cca62b532.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358167359-3e040562-48e4-47b5-9fb5-a499a6c1ea91.png" alt="" loading="lazy"><br>
+这里我们也可以在exportBeaconStage函数中输出一下Path过后的DLL是什么样子，拿到以后可以方便我们后续的观察<br>
+<img src="https://pyroxenites.github.io/post-images/1667370954291-fc847773-00aa-4d8a-a515-a39c18ea570b.png" alt="" loading="lazy"><br>
+以上流程就是简单梳理一下ScListener.export方法做了那些事情，export函数完成以后便会返回beacon处理以后字节数组<br>
+<img src="https://pyroxenites.github.io/post-images/1667358306143-c5c45b83-ed60-4bb0-9fb6-f46c1d2c40fd.png" alt="" loading="lazy"><br>
+随后便是根据输入的文件类型，输入默认文件名，并弹出保存窗口<br>
+<img src="https://pyroxenites.github.io/post-images/1667358504174-e0ade4bd-e32b-46eb-b242-8e0b7a2813cc.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358630567-5e7a3496-646c-409e-abd2-3e8be19a81d5.png" alt="" loading="lazy"><br>
+随后我们点击保存按钮的时候，它就会进入dialogResult方法下<br>
+<img src="https://pyroxenites.github.io/post-images/1667370037312-b638011a-01ec-45db-a6a7-bd8054f75d45.png" alt="" loading="lazy"><br>
+因为在上面dialogAction函数中，我们只是获取到了处理好后的beacon.dll，还有没有生成beacon.exe，在收集到对应的架构以后，便会进入到对应的patchArtifact函数中，这里主要是将beacon的字节数组Path到artifact64big.exe这个启动器里面。随后便会生成beacon.exe，便可正常启动上线了。</p>
+<blockquote>
+<p>PS:对于上述的Path操作，如果拥有源码和开发环境，以及软件目的是自用的话，其实可以手动，但也会很麻烦</p>
+</blockquote>
+<p>如果需要对这种不开源默认生成的Beacon以及其他公开形式的Beacon进行查杀的话，提取静态强特征即可，提取到的就可以用于静态扫描和内存扫描，当然CS也有相应的解决措施。<br>
+<img src="https://pyroxenites.github.io/post-images/1667456362806-ec852c79-8702-41d4-aaed-bb8bfb721446.png" alt="" loading="lazy"><br>
+对于个性化来说，WindowsExecutableStageDialog是生成木马的地方，也可以添加一下个性化以后的木马，相当于自动化处理C2profile配置以及IP和端口处理问题。</p>
+<h2 id="cs如何上线木马">CS如何上线木马</h2>
+<p>当我们双击beacon.exe上线的时候，因为我们使用的payload是HTTP协议，所以可以用Proxifier+burp的组合去观察数据包。<br>
+当我们点击时候，beacon.exe会发送一个数据包，但是CS控制台并没有任何反应<br>
+<img src="https://pyroxenites.github.io/post-images/1667445005266-373ca16d-0819-4f16-8123-d649b15bf7ad.png" alt="" loading="lazy"><br>
+但当我们Forward这个数据包以后会发现CS控制台会输出目标信息，那么第一个数据包就可以猜测为上线数据包，里面包含了被控主机的信息，而且除了Cookie被加密以后，其他明文地方并没有看到上线信息，那么可以继续猜测Cookie是存储beacon获取到数据的地方。<br>
+<img src="https://pyroxenites.github.io/post-images/1667445025813-21864603-c397-4b4b-bef5-d3d4e5192808.png" alt="" loading="lazy"><br>
+随后每次心跳时间都会发送一个数据包，通过这个我们可以基本看到beacon和teamserver的通信方式。<br>
+这里我们可以对比着WBGlIl师傅逆向出来的源码进行更好理解，beacon是如何对获取到的数据进行处理的<br>
+<img src="https://pyroxenites.github.io/post-images/1667467663188-0f089ffc-3dc1-44af-b22a-e33c407d45c9.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465300348-8325c76e-10ef-45b4-aedf-6b177b921816.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465454439-b1fc39e9-9f2b-447f-9fab-af150a7cc4f8.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465237902-36c43791-61dd-46ea-a676-aa8b7329b2f9.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465478877-48276322-2d10-4659-a152-4d95801d04d9.png" alt="" loading="lazy"><br>
+可以看到分为了三部分，第一个是标识符(48879)，第二个是数据大小，第三个就是数据本身，数据中放入了随机生成的AES密钥(16字节)+ANSI(2)+OEM(2)+随机生成的beaconID(4)+当前进程PID(4)+端口信息+一些本机信息<br>
+随后对元数据进行RSA加密，最后发送数据的时候bases64编码，最后得到要发送数据包。<br>
+返回teamserver端，处理地方在WebServer类的serve方法中，这边我们直接看代码对元数据的解析操作<br>
+可以看到在decrypt函数中初始化私钥，然后解密，接着判断标志数48879，如果不相等则解密失败，然后看数据长度，如果大于117则失败，随后在process_beacon_metadata读取前16字节为后续AES的key做准备，又读取了4位字节去设置WindowsCharsets，随后初始化BeaconEntry，并从元数据当中不断取值填写信息<br>
+<img src="https://pyroxenites.github.io/post-images/1667526059813-763323a2-2bb1-4bb9-9273-b148031ae5a6.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527508648-9704db55-6d91-4fb8-8ea2-4a5268173538.png" alt="" loading="lazy"><br>
+对于可实现的CS协议，可以用任何语言去个性化beacon，也可以用于欺骗防御，beacon端可以理解teamserver发送的数据，teamserver又可以正常解析到beacon端获取到的数据<br>
+如果需要对默认的CS上线流量进行检测的话，可以根据其在源码/resources/default.profile配置就可以进行检测，还有就是对公开C2profile的信息收集<br>
+<img src="https://pyroxenites.github.io/post-images/1667461549861-3d2d972d-4728-403d-bf93-4da1130c840b.png" alt="" loading="lazy"><br>
+在默认beacon.exe点击上线的时候，就留下MSSE命令管道的痕迹，也算是在上线阶段检测吧<br>
+<img src="https://pyroxenites.github.io/post-images/1667522881127-68e79e7d-3624-41ea-863d-fd131df6d52f.png" alt="" loading="lazy"></p>
+<h2 id="cs如何执行功能">CS如何执行功能</h2>
+<p>这边主要讲解一下，当我们传输命令的时候，beacon端是如何去运行的。<br>
+在CS中每一个功能都一个单独的功能号，teamserver靠返回功能让beacon端理解去执行什么任务，这个在我们上面输出的DLL中也可以看到痕迹。<br>
+<img src="https://pyroxenites.github.io/post-images/1667469573389-beb53ce7-0dda-40e1-bf0e-4cd92de20f34.png" alt="" loading="lazy"><br>
+这里我们可以借助DarkRay师傅的代码进行理解<br>
+这边可以看到发送上线和心跳请求包以后，解析teamserver返回的消息体，判断是否存在任务，然后对消息体进行解析，取出要任务号和执行参数，随后根据任务号进行判断要执行哪一个任务函数<br>
+<img src="https://pyroxenites.github.io/post-images/1667521562849-e8a48427-ac6a-49ad-8656-4968839294f3.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667522526739-f47f3024-fec1-4c42-bddf-0938105818d1.png" alt="" loading="lazy"><br>
+而在控制端可以看到，当我们在Console中输入命令，如shell whoami回车后，会进入BeaconConsole进行处理，根据字符串去判断要执行的任务<br>
+<img src="https://pyroxenites.github.io/post-images/1667522684628-1f033081-334a-4348-9bc0-dc61a9d80696.png" alt="" loading="lazy"><br>
+接着就会去TaskBeacon中构造这个任务，每个任务都是任务号的形式去发送，如sleep 4，就是给客户端发送4，这里是shell，一般会发送任务号78<br>
+<img src="https://pyroxenites.github.io/post-images/1667522708077-2231f514-3aaa-4c93-af1d-17ff18908871.png" alt="" loading="lazy"><br>
+beacon接收到任务后就会调用cmd去执行我们的命令，随后返回命令结果<br>
+<img src="https://pyroxenites.github.io/post-images/1667522764173-d7adb83d-5c85-46ba-949d-b1d6b86eeeda.png" alt="" loading="lazy"></p>
+<p>对于检查来说，功能都是带有目的性的，也就是行为检测，上面也提及到过sleeve存储着各种反射DLL，这个就是功能执行的时候使用的。</p>
+<blockquote>
+<p>这种方式，既可以减少beacon端的体积，也可以减少beacon端的特征函数，而且还可以让社区开发出自己想要的功能，最后创建傀儡进程虽然现在查杀的比较厉害，但是也可以保持住beacon的稳定性。</p>
+</blockquote>
+<p>比如这里我们以常见的Execute-assembly功能为例<br>
+在代码中我们可以看到，当我们输入指令的时候实际运行ExecuteAssemblyJob的spawn方法，这个方法可以定位到ExecuteAssemblyJob父类的方法<br>
+<img src="https://pyroxenites.github.io/post-images/1667527638590-20bb10f1-073a-4b65-9094-9fb67b893b1b.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527643271-2fc94f93-74d9-4eca-b609-2059adaa4f1c.png" alt="" loading="lazy"><br>
+看到首先它会获取到反射DLL(invokeassembly.dll)，然后获取到它的 ReflectiveLoader函数，接着就开始了任务的构建,随后还会根据C2profile是否需要去进行修复和混淆<br>
+<img src="https://pyroxenites.github.io/post-images/1667527664287-f446e508-21e1-4e74-adea-9095aa28c0c5.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527687238-006b4fc1-c41f-4674-8c56-5f66db6898ff.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527672537-9a6398c7-095d-4e24-adbd-63368588729b.png" alt="" loading="lazy"></p>
+<blockquote>
+<p>最后会根据一个的格式打包发送给beacon.dll，rundll32创建傀儡进程，然后向傀儡反射注入DLL，反射DLL实现内存加载.Net程序集</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1667528454054-414e1878-39b3-44be-9af4-3ee6bd8496ff.png" alt="" loading="lazy"><br>
+我们常见的logonpasswords、portscan也是这个套路，可以以此去做一个检测，这个点可以改动，我们也可以收集<br>
+<img src="https://pyroxenites.github.io/post-images/1667529051916-66c46a19-f1ec-4e89-8bd2-51a9478a7e56.png" alt="" loading="lazy"><br>
+另外对于攻击者来说，个性化beacon以后，就可以在BeaconConsole去编写自己想要实现的功能，不过功能最好集成在隐蔽存活这个点上面。</p>
+<h2 id="参考来源">参考来源</h2>
+<ol>
+<li><a href="https://bbs.pediy.com/user-home-718877.htm">https://bbs.pediy.com/user-home-718877.htm</a></li>
+<li><a href="https://github.com/WBGlIl/ReBeacon_Src">https://github.com/WBGlIl/ReBeacon_Src</a></li>
+<li><a href="https://github.com/darkr4y/geacon">https://github.com/darkr4y/geacon</a></li>
+</ol>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/diao-yong-zhan-qi-pian/">
+              <h3 class="post-title">
+                下一篇：调用栈欺骗
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

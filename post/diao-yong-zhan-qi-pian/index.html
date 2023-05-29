@@ -1,0 +1,630 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>调用栈欺骗 | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">调用栈欺骗</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-10-17</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/Ush7MRI1K/">
+                    C2
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <blockquote>
+<p>CSS(Call Stack Spoofing)<br>
+对抗场景:</p>
+<ol>
+<li>用在线程函数里，尤其是需要长期运行的线程函数。因为创建新线程基本都是会被监控的，中高端EDR会尝试遍历调用栈来查找敏感返回地址及扫描相关内存，所以CSS是有必要的 （此场景下使用比较重要）
+<ul>
+<li>对应的检测手法可参考:<a href="https://github.com/hasherezade/pe-sieve/wiki/4.9.-Scan-threads-callstack-(threads)">https://github.com/hasherezade/pe-sieve/wiki/4.9.-Scan-threads-callstack-(threads)</a></li>
+</ul>
+</li>
+<li>用在敏感API调用链中，主要是在调用一些非syscall的API和在实现DirectSyscall之前的API调用链中</li>
+</ol>
+</blockquote>
+<ul>
+<li>极个别高端EDR还会通过栈回溯的方式来确定系统调用的发起方是否是ntdll.dll和kernel32.dll等系统dll</li>
+</ul>
+<blockquote>
+<ul>
+<li>正常程序:主程序模块-&gt;kernel32.dll-&gt;ntdll.dll-&gt;syscall,这样当0环执行结束返回3环的时候，这个返回地址应该是在ntdll所在的地址范围之内</li>
+<li>直接进行系统调用:此时当ring0返回的时候，rip将会是你的主程序模块内，而并不是在ntdll所在的范围内</li>
+</ul>
+</blockquote>
+<h2 id="函数调用">函数调用</h2>
+<blockquote>
+<p>操作系统在加载可执行文件到内存运行之前需要完成许多准备工作，其中一项重要的任务是将代码和数据存储在内存中的适当位置，并分配和初始化必要的堆栈</p>
+</blockquote>
+<p>进程在内存中布局主要分为4个区域: 代码区, 数据区, 堆和栈.</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672794843411-03118115-254e-4059-b4bb-9f5b214e28cb.jpeg#averageHue=%23f9f8ee&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=628&amp;id=ud5d7c465&amp;originHeight=942&amp;originWidth=1314&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=91316&amp;status=done&amp;style=none&amp;taskId=ub8897e8e-e34f-4d4e-8ad4-8f4633801ec&amp;title=&amp;width=876" alt="未命名文件.jpg" loading="lazy"></figure>
+<h3 id="函数调用栈">函数调用栈</h3>
+<h4 id="作用">作用</h4>
+<ol>
+<li>保存函数的局部变量;</li>
+<li>向被调用函数传递参数;</li>
+<li>返回函数的返回值;</li>
+<li>保存函数的返回地址. (返回地址是指从被调用函数返回后调用者应该继续执行的指令地址)</li>
+</ol>
+<p>函数执行过程中会使用一块栈内存（栈帧）保存上述的值，在发生函数调用时，被调用函数的栈帧会被压入栈上，执行完后再弹出，因此栈的大小会根据函数调用的层级增加而增大，随函数的返回而缩小。</p>
+<h4 id="与栈相关的寄存器">与栈相关的寄存器</h4>
+<ul>
+<li>rsp寄存器, 始终指向函数调用栈栈顶
+<ul>
+<li>32位对应ESP寄存器</li>
+</ul>
+</li>
+<li>rbp寄存器, 一般用来指向函数栈帧的开始位置
+<ul>
+<li>32位对应EBP寄存器</li>
+</ul>
+</li>
+</ul>
+<p>下面举例说明，函数调用栈以及rsp/rbp与栈之间的关系是什么<br>
+函数调用链: A()-&gt;B()-&gt;C(), 并且正在执行函数 C().<br>
+<img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672796316601-b0b428fd-ad76-4866-88bd-db541711d202.jpeg#averageHue=%23faf9f3&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=641&amp;id=ucbf280f9&amp;originHeight=962&amp;originWidth=1480&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=130627&amp;status=done&amp;style=none&amp;taskId=uf439de80-709d-4a51-ad60-7d4e2bdc8b0&amp;title=&amp;width=986.6666666666666" alt="未命名文件.jpg" loading="lazy"><br>
+随着程序的运行, 如果 C, B 两个函数都执行完成并返回到A函数继续执行, 则栈的状态如下:<br>
+<img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672796538837-e6fde28b-a1fe-445d-9ab8-0ffe31a4cac1.jpeg#averageHue=%23fbfbfb&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=584&amp;id=uca5fed30&amp;originHeight=876&amp;originWidth=859&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=51991&amp;status=done&amp;style=none&amp;taskId=u95a80b47-1754-4926-a49a-3cce220e084&amp;title=&amp;width=572.6666666666666" alt="未命名文件.jpg" loading="lazy"></p>
+<h4 id="一些汇编指令">一些汇编指令</h4>
+<ul>
+<li>call/ret</li>
+</ul>
+<pre><code>call 目标地址
+在执行函数调用时，CPU会将rip寄存器的值压入栈中并将rip设置为目标地址，从而使CPU能够跳转到目标地址执行指令。
+ret
+用于从被调用函数返回到调用函数，实现原理是将call指令压入栈中的“返回地址”弹出并给rip寄存器。
+</code></pre>
+<ul>
+<li>push/pop</li>
+</ul>
+<pre><code>push 源操作数
+向堆栈中压入数据，压入数据后会提升栈顶指针，提升多少取决于压入数据的数据宽度
+pop 目标操作数
+释放压入堆栈中的数据，释放数据后会下降栈顶指针，下降多少取决于释放数据的数据宽度
+</code></pre>
+<ul>
+<li>leave</li>
+</ul>
+<pre><code>leave 指令没有操作数, 它一般放在函数的尾部 ret 指令之前, 用于调整 rsp 和 rbp, 这条指令相当于:
+mov %rbp, %rsp
+pop %rbp
+</code></pre>
+<h4 id="c语言函数栈帧过程">C语言函数栈帧过程</h4>
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+
+int sum(int a, int b)
+{
+    int s = a + b;
+    return s;
+}
+
+int main(int argc, char* argv[])
+{
+    __asm{
+		mov eax, eax
+    }
+    int n = sum(1, 2);
+    printf(&quot;n: %d\n&quot;, n);
+    return 0;
+}
+</code></pre>
+<p>在sum函数还没有调用的时候堆栈的位置<br>
+<img src="https://pyroxenites.github.io/post-images/1672882606087-8be17e24-a997-4244-9964-4d1fe5ca23ab.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672882618768-3d5393be-81d7-4804-891d-887ee0481112.png" alt="image.png" loading="lazy"></p>
+<pre><code class="language-cpp">002F186D  push        2
+002F186F  push        1  
+002F1871  call        _sum (02F1299h)  
+002F1876  add         esp,8  
+002F1879  mov         dword ptr [n],eax 
+</code></pre>
+<pre><code>push        2
+</code></pre>
+<p>把2压倒堆栈中，ESP地址变成0133FBB0，其值为2<br>
+<img src="https://pyroxenites.github.io/post-images/1672883173923-955f6698-026f-4a15-b6f9-992ef6635a82.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883249654-47dfabf3-7846-4494-b720-3739a643f2a8.png" alt="image.png" loading="lazy"></p>
+<pre><code>push        1 
+</code></pre>
+<p>把2压倒堆栈中，ESP地址变成0133FBAC，其值为1<br>
+<img src="https://pyroxenites.github.io/post-images/1672883317578-19a84439-4910-4768-9512-a1cfbefbed0d.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883342437-91cd87f8-d426-43ae-8e68-b09a7cf22fce.png" alt="image.png" loading="lazy"></p>
+<pre><code>call        _sum (02F1299h) 
+</code></pre>
+<p>把下一条指令的地址002F1876压入到堆栈中，并跳到函数执行地址<br>
+<img src="https://pyroxenites.github.io/post-images/1672883755926-8b7eafad-b115-43dd-999d-e532967b9836.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883784410-df123155-1473-40ef-bca5-0e9b6b862bbd.png" alt="image.png" loading="lazy"><br>
+进入到sum函数的汇编</p>
+<pre><code class="language-cpp">002F1960  push        ebp  
+002F1961  mov         ebp,esp  
+002F1963  sub         esp,0CCh  
+002F1969  push        ebx  
+002F196A  push        esi  
+002F196B  push        edi  
+002F196C  lea         edi,[ebp-0Ch]  
+002F196F  mov         ecx,3  
+002F1974  mov         eax,0CCCCCCCCh
+</code></pre>
+<pre><code>push        ebp  
+</code></pre>
+<p>将ebp寄存器的值推送到堆栈中,ESP为0133FBA4</p>
+<pre><code>mov         ebp,esp  
+</code></pre>
+<p>将esp寄存器的值移到ebp寄存器中，esp和ebp相等了<br>
+<img src="https://pyroxenites.github.io/post-images/1672885061462-f41dcd2b-cc4b-4f6f-942e-0dec9d3a5dd4.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672885095422-4020383a-261d-4f72-9f10-6512fe98b46e.png" alt="image.png" loading="lazy"></p>
+<pre><code>sub         esp,0CCh
+</code></pre>
+<p>从esp寄存器的值中减去0CCh(十进制为204)，给新的函数堆栈分配内存<br>
+<img src="https://pyroxenites.github.io/post-images/1672885414670-bf552ab3-978a-4c13-9ad0-5ee7526896a7.png" alt="image.png" loading="lazy"></p>
+<pre><code>push        ebx  
+push        esi  
+push        edi
+</code></pre>
+<p>将ebx、esi和edi寄存器的值推到堆栈中。这些寄存器在x86汇编中经常被用作通用寄存器，并被保存，以便以后可以恢复它们的值<br>
+<img src="https://pyroxenites.github.io/post-images/1672885979406-f391569d-fe94-4b4e-8ed7-43069570d0a5.png" alt="image.png" loading="lazy"></p>
+<pre><code>00EF185F  mov         ecx,3  
+00EF1864  mov         eax,0CCCCCCCCh
+00EF1869  rep stos    dword ptr es:[edi]
+</code></pre>
+<p>在缓冲区添加0CCCCCCCCh</p>
+<h2 id="栈展开">栈展开</h2>
+<blockquote>
+<p>stack unwinding</p>
+</blockquote>
+<p>在抛出异常时，会暂停当前函数的执行并寻找匹配的 catch 子句来处理该异常。首先会检查 throw 语句是否在 try 块内，如果是的话，会检查与该 try 块相关的 catch 子句，看看是否能处理该异常。如果不能处理，则会退出当前函数，释放该函数的内存并销毁局部对象，并在调用该函数的上层函数中继续查找可以处理该异常的 catch 子句，直到找到为止。这一过程被称为栈展开。在处理完该异常的 catch 子句之后，程序会从 catch 子句之后的位置继续执行。<br>
+在其中需要注意的是</p>
+<blockquote>
+<ol>
+<li>为局部对象调用析构函数</li>
+</ol>
+</blockquote>
+<p>在展开栈的过程中，局部对象所占用的内存会被释放，并执行类型局部对象的析构函数。但是，要注意：如果在一个块中使用 new 动态分配内存，并且在释放该资源之前发生异常，导致块因异常退出，那么栈展开期间不会释放该资源，编译器也不会删除指针，导致内存泄露。</p>
+<blockquote>
+<ol start="2">
+<li>析构函数应该从不抛出异常</li>
+</ol>
+</blockquote>
+<p>在栈展开时，如果析构函数抛出未经处理的异常，将导致调用标准库的 terminate 函数。这通常会导致程序调用 abort 函数并非正常退出。因此，析构函数永远不应该抛出异常。</p>
+<blockquote>
+<ol start="3">
+<li>异常与构造函数</li>
+</ol>
+</blockquote>
+<p>如果在构造函数对象时发生异常，此时该对象可能只是被部分构造，要保证能够适当的撤销这些已构造的成员</p>
+<blockquote>
+<ol start="4">
+<li>未捕获的异常将会终止程序</li>
+</ol>
+</blockquote>
+<p>不能不处理异常。如果找不到匹配的catch，程序就会调用库函数terminate。</p>
+<pre><code class="language-cpp">#include &lt;string&gt;
+#include &lt;iostream&gt;
+
+using namespace std;
+
+class MyException{};
+class Dummy {
+public:
+    // 构造函数
+    Dummy(string s) : MyName(s) { PrintMsg(&quot;Created Dummy:&quot;); }
+    // 拷贝构造
+    Dummy(const Dummy&amp; other) : MyName(other.MyName){ PrintMsg(&quot;Copy created Dummy:&quot;); }
+    // 析构函数
+    ~Dummy(){ PrintMsg(&quot;Destroyed Dummy:&quot;); }
+    void PrintMsg(string s) { cout &lt;&lt; s  &lt;&lt; MyName &lt;&lt;  endl; }
+    string MyName;
+    int level;
+};
+
+void C(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function C&quot; &lt;&lt; endl;
+    d.MyName = &quot; C&quot;;
+    throw MyException();
+
+    cout &lt;&lt; &quot;Exiting Function C&quot; &lt;&lt; endl;
+}
+
+void B(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function B&quot; &lt;&lt; endl;
+    d.MyName = &quot; B&quot;;
+    C(d, i + 1);
+    cout &lt;&lt; &quot;Exiting Function B&quot; &lt;&lt; endl;
+}
+
+void A(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function A&quot; &lt;&lt; endl;
+    d.MyName = &quot; A&quot; ;
+  //  Dummy* pd = new Dummy(&quot;new Dummy&quot;); //Not exception safe!!!
+    B(d, i + 1);
+ //   delete pd;
+    cout &lt;&lt; &quot;Exiting FunctionA&quot; &lt;&lt; endl;
+}
+
+int main() {
+    cout &lt;&lt; &quot;Entering main&quot; &lt;&lt; endl;
+    try {
+        Dummy d(&quot; M&quot;);
+        A(d,1);
+    }
+    catch (MyException&amp; e) {
+        cout &lt;&lt; &quot;Caught an exception of type: &quot; &lt;&lt; typeid(e).name() &lt;&lt; endl;
+    }
+    cout &lt;&lt; &quot;Exiting main.&quot; &lt;&lt; endl;
+    return 0;
+}
+</code></pre>
+<p>运行效果:<br>
+<img src="https://pyroxenites.github.io/post-images/1672891054781-1ade1ce1-36e5-47ee-8726-b84f07665303.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672905630196-1366ad60-e6d8-40f8-a0b3-d03143a3f4e5.jpeg#averageHue=%23fafafa&amp;clientId=u33da875c-514d-4&amp;from=paste&amp;height=396&amp;id=ud1f877fd&amp;originHeight=594&amp;originWidth=724&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=31785&amp;status=done&amp;style=none&amp;taskId=u7f58154c-38e3-4c00-b1e6-08203b3c374&amp;title=&amp;width=482.6666666666667" alt="未命名文件.jpg" loading="lazy"><br>
+程序执行将从 C 中的 throw 语句跳转到 main 中的 catch 语句，并在此过程中展开每个函数。</p>
+<blockquote>
+<ol>
+<li>根据创建 Dummy 对象的顺序，在它们超出范围时将其<strong>销毁</strong></li>
+<li>除了包含 catch 语句的 main 之外，其他函数均未完成</li>
+<li>函数 A 绝不会从其对 B() 的调用返回，并且 B 绝不会从其对 C() 的调用返回</li>
+</ol>
+</blockquote>
+<h2 id="栈回溯">栈回溯</h2>
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+#include &lt;excpt.h&gt;
+#include &lt;conio.h&gt;
+
+#pragma warning(disable: 4311 4312 4313)
+
+int fake_ebp_1, fake_ebp_2;
+
+void __stdcall _StackTrace(int StackBase, int ebp, int esp)
+{
+    int limit = 30, retaddr, calladdr;
+    printf(&quot;ebp      ret      call\n&quot;);
+    while ((ebp &gt; esp) &amp;&amp; (ebp &lt; StackBase) &amp;&amp; (limit--)) 
+        {
+            retaddr = *(int *)(ebp + 4);
+            calladdr = 0;
+            __try 
+                {
+                if (*(unsigned char *)(retaddr - 5) == 0xe8) 
+                {	
+                calladdr = *(int *)(retaddr - 4) + retaddr;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    printf(&quot;%08x %08x %08x\n&quot;, ebp, retaddr, calladdr);
+    ebp = *(int *)ebp;
+}
+printf(&quot;trace completed.\n&quot;);
+}
+
+__declspec(naked) void __stdcall StackTrace()
+{
+// iceboy's stack trace
+__asm {
+push esp
+push ebp
+push fs:[0x4]        //; StackBase
+    call _StackTrace
+        retn
+        }
+    }
+
+void b(int, int)
+{
+    StackTrace();
+}
+
+void a(int, int, int)
+{
+    b(0, 0);
+}
+
+int search_call(int fn1, int fn2)
+{
+    while (true) 
+        {
+            if (*(unsigned char *)(fn1++) == 0xe8)	
+            {										
+                if ((*(int *)fn1 + fn1 + 4) == fn2)
+                {																	
+                    return fn1 + 4;					
+                }
+            }
+        }
+}
+
+// fake call
+__declspec(naked) void __stdcall d(int, int)
+{
+__asm {
+push fake_ebp_1
+push ebp
+mov ebp, esp
+    push fake_ebp_2
+push ebp
+mov ebp, esp
+call StackTrace
+pop esp
+pop ebp
+pop eax
+retn 8
+    }
+    }
+
+    // fake call &amp; hide self
+__declspec(naked) void __stdcall e(int, int)
+{
+__asm {
+push ebp
+mov ebp, [ebp]
+    push 0
+push 0
+    call d
+pop ebp
+retn 8
+    }
+    }
+
+void c(int, int, bool hideself)
+{
+    if (!hideself) 
+    {
+        d(0, 0);
+    } else 
+    {
+        e(0, 0);
+    }
+}
+
+int main()
+{
+    fake_ebp_1 = search_call((int)main, (int)a);
+    fake_ebp_2 = search_call((int)a, (int)b);
+
+
+    printf(&quot;address of function a:    0x%08x\n&quot;, a);
+    printf(&quot;address of function b:    0x%08x\n&quot;, b);
+    printf(&quot;address of function c:    0x%08x\n&quot;, c);
+    printf(&quot;address of function main: 0x%08x\n&quot;, main);
+
+    printf(&quot;\ntest 1: standard call\n&quot;);
+    a(0, 0, 0);
+
+    printf(&quot;\ntest 2: fake call\n&quot;);
+    c(0, 0, false);
+
+    printf(&quot;\ntest 3: fake call &amp; hide self\n&quot;);
+    c(0, 0, true);
+
+    printf(&quot;\npress any key to continue...&quot;);
+    _getch();
+    printf(&quot;\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="代码解释">代码解释</h3>
+<pre><code class="language-cpp">		fake_ebp_1 = search_call((int)main, (int)a);
+		fake_ebp_2 = search_call((int)a, (int)b);
+</code></pre>
+<pre><code class="language-cpp">int search_call(int fn1, int fn2)
+{
+    while (true) 
+	{
+        if (*(unsigned char *)(fn1++) == 0xe8)	
+		{										
+            if ((*(int *)fn1 + fn1 + 4) == fn2)
+			{																	
+				 return fn1 + 4;					
+            }
+        }
+    }
+}
+</code></pre>
+<p>对于E8 call可以用来计算被调函数的首地址</p>
+<blockquote>
+<p>e8后面的四字节机器码是此时指令指针（EIP）的值与目的地址（被调函数首地址）的差值，也即两地址间的相对偏移<br>
+指令指针在这里可以叫做返回地址，意思就是从被调函数返回后应执行的第一条指令的地址<br>
+目的地址（被调函数首地址）： 目的地址 =  返回地址 +  相对偏移</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1673231287351-62f58bed-65c0-4004-a414-0630118b0b66.png" alt="image.png" loading="lazy"><br>
+0092D07+FFFF3F6C = 00921073</p>
+<blockquote>
+<p>故上述代码中</p>
+<ul>
+<li>fn1+4    返回地址</li>
+<li>fn2         目标地址</li>
+<li>*(int *)fn1 偏移量</li>
+<li>fake_ebp_1 main函数调用a函数的后的返回地址</li>
+<li>fake_ebp_2 a函数调用b函数后的返回地址</li>
+</ul>
+</blockquote>
+<pre><code class="language-cpp">    printf(&quot;address of function a:    0x%08x\n&quot;, a);
+    printf(&quot;address of function b:    0x%08x\n&quot;, b);
+    printf(&quot;address of function c:    0x%08x\n&quot;, c);
+    printf(&quot;address of function main: 0x%08x\n&quot;, main);
+</code></pre>
+<p>反汇编后发下结果输出的并不是这几个函数的真正首地址，而是它们在 静态函数跳转表 中的地址<br>
+<img src="https://pyroxenites.github.io/post-images/1673234131119-f26e804e-6fe4-450e-a223-52ff52202486.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1673234140155-11f3fb44-7dde-44df-b850-de08cb27101c.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>ILT是一种用于静态函数跳转的表，它通过记录函数入口并跳转实现间接调用，这有助于提高程序的效率，特别是在调试阶段。ILT在编译release程序时不再使用。</p>
+</blockquote>
+<blockquote>
+<p>其他知识:<br>
+__declspec(naked)<br>
+裸函数（naked function）是指在编译器生成代码时没有通常的形成栈的语句块（参数、局部变量的入栈操作），在函数结束时也没有恢复栈的动作（参数、局部变量的出栈操作，以及返回语句）的函数。裸函数可以自己完成参数的入栈出栈操作及返回操作，通常使用内嵌汇编码的方式完成。裸函数在写虚拟设备驱动时特别有用，但仅在x86系列CPU中有效。</p>
+</blockquote>
+<p>方便进行栈欺骗</p>
+<blockquote>
+<p>注意点:如果使用_declspec(naked)修饰的话，要注意自己恢复堆栈平衡</p>
+</blockquote>
+<pre><code class="language-cpp">__declspec(naked) void __stdcall d(int, int)
+{
+    __asm {
+    push fake_ebp_1
+    push ebp
+    mov ebp, esp
+        push fake_ebp_2
+    push ebp
+    mov ebp, esp
+    call StackTrace
+    pop esp
+    pop ebp
+    pop eax
+    retn 8
+        }
+}
+</code></pre>
+<p>可以看出在d函数中在栈上压入了fake_ebp_1和fake_ebp_2，所以回溯的时候的路径与函数调用顺序是不同的，这就是栈欺骗。<br>
+在e函数中的</p>
+<pre><code class="language-cpp">push ebp
+mov ebp, [ebp]
+</code></pre>
+<p>这里并不是将ebp赋值为当前的esp，而是[ebp]，也就是main函数的栈基址，所以在我们回溯的时候就会忽略函数c的函数栈帧，这也是栈欺骗的一个手段。</p>
+<h2 id="其他问题">其他问题</h2>
+<p><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1673416446207-3ff4fdf0-023e-49f9-8f61-a0ebd2459efa.jpeg#averageHue=%23222121&amp;clientId=u2386f88d-42bc-4&amp;from=paste&amp;height=121&amp;id=u6c3192b9&amp;originHeight=181&amp;originWidth=652&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=48883&amp;status=done&amp;style=none&amp;taskId=u9a220bc9-675a-47cd-b47b-e14ce2f8451&amp;title=&amp;width=434.6666666666667" alt="img_v2_66b07202-c998-4db8-b6b4-bd9d10ca4deg.jpg" loading="lazy"><br>
+问: 为什么这个返回地址00007FF69CC32387 + 偏移量 FFFFEED6 = 7FF7 9CC3 125D 不等于目标地址 07FF69CC3125Dh</p>
+<blockquote>
+<p>答:<br>
+计算机以补码的形式存放数据，所以E8 指令后的4个字节偏移值也是以补码的形式存放的，在计算时如果要跳转的目标地址在E8指令所在的地址前面相对偏移是负值，如果在E8指令所在的地址后面，相对偏移是正值。在手动计算时要将其还原为原码再参与计算。<br>
+正数的补码、原码、反码都等于其自身，所以可以直接相加。<br>
+负数的补码转换为原码需要对其 标志位外的其他位取反 +1，还原为原码后再进行相加。<br>
+在X86下，因为地址宽度和偏移的数据宽度一致，所以相加后的进位会被舍弃掉。<br>
+在X64下，因为地址宽度大于偏移宽度，所以相加后的进位会被保留，所以就导致了计算的错误产生，在写程序时可以只使用低32位的地址与 偏移值进行运算，再进位丢弃后再与高32位的地址进行拼接。</p>
+</blockquote>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/burp-ji-qiao-dom-invader-shi-yong/">
+              <h3 class="post-title">
+                下一篇：Burp技巧DOM Invader使用
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>

